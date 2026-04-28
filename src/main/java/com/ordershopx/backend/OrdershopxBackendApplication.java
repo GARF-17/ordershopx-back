@@ -1,4 +1,4 @@
-package com.ordershopx_backend;
+package com.ordershopx.backend;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

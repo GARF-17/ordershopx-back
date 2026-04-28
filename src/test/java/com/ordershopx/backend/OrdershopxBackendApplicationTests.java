@@ -1,4 +1,4 @@
-package com.ordershopx_backend;
+package com.ordershopx.backend;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
