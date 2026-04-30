@@ -14,23 +14,23 @@ public class ApiResponse<T> {
     private String message;
     private T data;
     private Object errors;
-
     private LocalDateTime timestamp;
     private String traceId;
     private String path;
-
     private String errorCode;
 
     private static String getTraceId() {
         return MDC.get("traceId");
     }
 
-    public static <T> ApiResponse<T> success(T data) {
-        return buildSuccess(data, "OK", 200, null);
-    }
-
+    // RESPUESTA 200 OK
     public static <T> ApiResponse<T> success(T data, String message) {
         return buildSuccess(data, message, 200, null);
+    }
+
+    // RESPUESTA 201 CREATED
+    public static <T> ApiResponse<T> created(T data, String message) {
+        return buildSuccess(data, message, 201, null);
     }
 
     public static <T> ApiResponse<T> success(T data, String message, int status, String path) {
