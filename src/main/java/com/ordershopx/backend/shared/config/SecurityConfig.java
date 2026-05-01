@@ -46,9 +46,9 @@ public class SecurityConfig {
 
 
                         // PROTECCIÓN POR ROLES
-                        .requestMatchers("/admin/**").hasRole("ADMINISTRADOR")
-                        .requestMatchers("/restaurante/**").hasRole("RESTAURANTE")
-                        .requestMatchers("/cliente/**").hasRole("COMENSAL")
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMINISTRADOR")
+                        .requestMatchers("/api/v1/restaurantes/**").hasRole("RESTAURANTE")
+                        .requestMatchers("/api/v1/clientes/**").hasRole("COMENSAL")
 
                         .anyRequest().authenticated()
                 )

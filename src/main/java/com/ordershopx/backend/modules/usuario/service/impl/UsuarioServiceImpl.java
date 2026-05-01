@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -50,4 +52,12 @@ public class UsuarioServiceImpl implements IUsuarioService {
         return usuarioRepository.findByCorreoElectronico(correoElectronico)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado."));
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Usuario obtenerPorId(UUID usuarioId) {
+        return usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado."));
+    }
+
 }
