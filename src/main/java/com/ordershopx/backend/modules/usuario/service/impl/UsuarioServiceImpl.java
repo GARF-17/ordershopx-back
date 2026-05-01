@@ -8,6 +8,7 @@ import com.ordershopx.backend.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Slf4j
@@ -17,43 +18,36 @@ public class UsuarioServiceImpl implements IUsuarioService {
     private final UsuarioRepository usuarioRepository;
 
     @Override
+    @Transactional
     public Usuario crearUsuario(Usuario usuario) {
+        log.info("event=crear_usuario_start correo={}", usuario.getCorreoElectronico());
 
-        log.info("event=crear_usuario_start correoElectronico={}", usuario.getCorreoElectronico());
+        validarDisponibilidad(usuario.getCorreoElectronico(), usuario.getDni(), usuario.getTelefono());
 
-        if (usuarioRepository.existsByCorreoElectronico(usuario.getCorreoElectronico())) {
+        return usuarioRepository.save(usuario);
+    }
 
-            log.warn("event=crear_usuario_conflict reason=correoElectronico_already_exists correoElectronico={}",
-                    usuario.getCorreoElectronico());
+    @Override
+    @Transactional(readOnly = true)
+    public void validarDisponibilidad(String correo, String dni, String telefono) {
 
+        if (correo != null && usuarioRepository.existsByCorreoElectronico(correo)) {
             throw new ConflictException("El correo electrónico ya está registrado.");
         }
 
-        // Guardar usuario
-        Usuario usuarioGuardado = usuarioRepository.save(usuario);
+        if (dni != null && usuarioRepository.existsByDni(dni)) {
+            throw new ConflictException("El DNI ya está registrado.");
+        }
 
-        log.info("event=crear_usuario_success usuarioId={}", usuarioGuardado.getUsuarioId());
-
-        return usuarioGuardado;
+        if (telefono != null && usuarioRepository.existsByTelefono(telefono)) {
+            throw new ConflictException("El número de teléfono ya está en uso.");
+        }
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Usuario obtenerPorCorreo(String correoElectronico) {
-
-        log.info("event=obtener_usuario correoElectronico={}", correoElectronico);
-
         return usuarioRepository.findByCorreoElectronico(correoElectronico)
-                .orElseThrow(() -> {
-                    log.warn("event=usuario_not_found correoElectronico={}", correoElectronico);
-                    return new ResourceNotFoundException("Usuario no encontrado.");
-                });
-    }
-
-    @Override
-    public boolean existePorCorreo(String correoElectronico) {
-
-        log.info("event=existe_usuario correoElectronico={}", correoElectronico);
-
-        return usuarioRepository.existsByCorreoElectronico(correoElectronico);
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado."));
     }
 }

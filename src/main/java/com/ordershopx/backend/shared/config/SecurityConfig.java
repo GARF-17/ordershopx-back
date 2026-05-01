@@ -39,7 +39,12 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
+
+                        // PÚBLICOS
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/api/v1/usuarios/**").permitAll()
+
+
                         // PROTECCIÓN POR ROLES
                         .requestMatchers("/admin/**").hasRole("ADMINISTRADOR")
                         .requestMatchers("/restaurante/**").hasRole("RESTAURANTE")
