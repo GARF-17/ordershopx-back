@@ -4,6 +4,8 @@ import com.ordershopx.backend.modules.usuario.entity.Usuario;
 import com.ordershopx.backend.shared.enums.EstadoRestaurante;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -18,7 +20,6 @@ import java.util.UUID;
 public class Restaurante {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id_usuario")
     private UUID idUsuario;
 
@@ -58,7 +59,8 @@ public class Restaurante {
     private String imagenPortadaUrl;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "estado")
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "estado", columnDefinition = "estado_restaurante")
     private EstadoRestaurante estado;
 
     @Column(name = "latitud", precision = 10, scale = 8)

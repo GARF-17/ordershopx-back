@@ -1,6 +1,7 @@
 package com.ordershopx.backend.modules.restaurante.repository;
 
 import com.ordershopx.backend.modules.restaurante.entity.Restaurante;
+import com.ordershopx.backend.modules.usuario.entity.Usuario;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
@@ -11,4 +12,6 @@ public interface RestauranteRepository extends JpaRepository<Restaurante, UUID> 
     boolean existsByRuc(String ruc);
 
     Optional<Restaurante> findByRuc(String ruc);
+
+    Optional<Restaurante> findByUsuario(Usuario usuario);
 }

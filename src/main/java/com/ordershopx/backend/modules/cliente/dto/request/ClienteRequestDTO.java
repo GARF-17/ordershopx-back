@@ -19,5 +19,4 @@ public class ClienteRequestDTO {
     @Size(max = 150, message = "El apellido no puede superar los 150 caracteres")
     private String apellido;
 
-    private JsonNode preferenciasJson;
 }

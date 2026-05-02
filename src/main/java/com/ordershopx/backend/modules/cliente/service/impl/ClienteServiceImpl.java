@@ -1,6 +1,7 @@
 package com.ordershopx.backend.modules.cliente.service.impl;
 
 import com.ordershopx.backend.modules.cliente.dto.request.ClienteRequestDTO;
+import com.ordershopx.backend.modules.cliente.dto.request.PreferenciasRequestDTO;
 import com.ordershopx.backend.modules.cliente.dto.request.UbicacionRequestDTO;
 import com.ordershopx.backend.modules.cliente.dto.response.ClienteResponseDTO;
 import com.ordershopx.backend.modules.cliente.entity.Cliente;
@@ -102,4 +103,42 @@ public class ClienteServiceImpl implements IClienteService {
 
         log.info("event=actualizar_ubicacion_success usuario={}", usuario.getCorreoElectronico());
     }
+
+    // CREAR DESDE REGISTER
+    @Override
+    @Transactional
+    public void crearDesdeRegister(Usuario usuario, String nombre, String apellido) {
+
+        log.info("event=crear_cliente_register usuario={}", usuario.getCorreoElectronico());
+
+        clienteRepository.findByUsuario(usuario).ifPresent(c -> {
+            log.warn("event=cliente_ya_existe_register usuario={}", usuario.getCorreoElectronico());
+            throw new ConflictException("El cliente ya existe");
+        });
+
+        Cliente cliente = Cliente.builder()
+                .usuario(usuario)
+                .nombre(nombre)
+                .apellido(apellido)
+                .build();
+
+        clienteRepository.save(cliente);
+
+        log.info("event=crear_cliente_register_success usuario={}", usuario.getCorreoElectronico());
+    }
+
+        // ACTUALIZAR PREFERENCIAS
+        @Override
+        @Transactional
+        public void actualizarPreferencias(PreferenciasRequestDTO request) {
+
+            Usuario usuario = getUsuarioAutenticado();
+
+            Cliente cliente = clienteRepository.findByUsuario(usuario)
+                    .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
+
+            cliente.setPreferenciasJson(request.getPreferenciasJson());
+
+            clienteRepository.save(cliente);
+        }
 }

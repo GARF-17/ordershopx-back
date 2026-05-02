@@ -1,6 +1,7 @@
 package com.ordershopx.backend.modules.cliente.controller;
 
 import com.ordershopx.backend.modules.cliente.dto.request.ClienteRequestDTO;
+import com.ordershopx.backend.modules.cliente.dto.request.PreferenciasRequestDTO;
 import com.ordershopx.backend.modules.cliente.dto.request.UbicacionRequestDTO;
 import com.ordershopx.backend.modules.cliente.dto.response.ClienteResponseDTO;
 import com.ordershopx.backend.modules.cliente.service.IClienteService;
@@ -60,6 +61,18 @@ public class ClienteController {
 
         return ResponseEntity.ok(
                 ApiResponse.success(null, "Ubicación actualizada correctamente")
+        );
+    }
+
+    @PutMapping("/preferencias")
+    public ResponseEntity<ApiResponse<Void>> actualizarPreferencias(
+            @RequestBody PreferenciasRequestDTO request
+    ) {
+
+        clienteService.actualizarPreferencias(request);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(null, "Preferencias actualizadas correctamente")
         );
     }
 }
