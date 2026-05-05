@@ -48,7 +48,7 @@ public class RestauranteController {
         );
     }
 
-    // 📍 UBICACIÓN
+    // UBICACIÓN
     @PutMapping("/ubicacion")
     public ResponseEntity<ApiResponse<Void>> actualizarUbicacion(
             @RequestBody UbicacionRestauranteRequestDTO request
