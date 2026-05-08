@@ -12,6 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/restaurantes")
 @RequiredArgsConstructor
@@ -19,6 +22,19 @@ import org.springframework.web.bind.annotation.*;
 public class RestauranteController {
 
     private final IRestauranteService restauranteService;
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<RestauranteResponseDTO>>> listarRestaurantes() {
+
+        log.info("event=api_listar_restaurantes");
+
+        List<RestauranteResponseDTO> response =
+                restauranteService.listarRestaurantes();
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response, "Restaurantes obtenidos correctamente")
+        );
+    }
 
     // OBTENER MI RESTAURANTE
     @GetMapping("/me")
