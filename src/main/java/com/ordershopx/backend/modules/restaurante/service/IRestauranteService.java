@@ -5,9 +5,13 @@ import com.ordershopx.backend.modules.restaurante.dto.request.UbicacionRestauran
 import com.ordershopx.backend.modules.restaurante.dto.response.RestauranteResponseDTO;
 import com.ordershopx.backend.modules.usuario.entity.Usuario;
 
+import java.util.List;
+
 public interface IRestauranteService {
 
     RestauranteResponseDTO obtenerMiRestaurante();
+
+    List<RestauranteResponseDTO> listarRestaurantes();
 
     RestauranteResponseDTO actualizarRestaurante(RestauranteRequestDTO request);
 

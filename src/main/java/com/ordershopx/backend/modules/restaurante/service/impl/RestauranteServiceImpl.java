@@ -19,6 +19,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -54,6 +56,22 @@ public class RestauranteServiceImpl implements IRestauranteService {
         log.info("event=obtener_restaurante_success usuario={}", usuario.getCorreoElectronico());
 
         return restauranteMapper.toResponse(restaurante);
+    }
+
+    // LISTAR RESTAURANTES
+    @Override
+    @Transactional(readOnly = true)
+    public List<RestauranteResponseDTO> listarRestaurantes() {
+
+        log.info("event=listar_restaurantes_start");
+
+        List<Restaurante> restaurantes = restauranteRepository.findAll();
+
+        log.info("event=listar_restaurantes_success total={}", restaurantes.size());
+
+        return restaurantes.stream()
+                .map(restauranteMapper::toResponse)
+                .toList();
     }
 
     // ACTUALIZAR RESTAURANTE
