@@ -40,10 +40,12 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
+                        // PERMITIR PETICIONES
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+
                         // PÚBLICOS
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/usuarios/**").permitAll()
-
 
                         // PROTECCIÓN POR ROLES
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMINISTRADOR")
