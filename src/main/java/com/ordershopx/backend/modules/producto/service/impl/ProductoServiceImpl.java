@@ -131,6 +131,20 @@ public class ProductoServiceImpl implements IProductoService {
                 .toList();
     }
 
+    // LISTAR PRODUCTOS PARA CLIENTES
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductoResponseDTO> listarProductosCliente(UUID idRestaurante) {
+
+        return productoRepository
+                .findByCategoria_Restaurante_IdUsuarioAndEstaDisponibleTrueAndEliminadoEnIsNullOrderByNombreAsc(
+                        idRestaurante
+                )
+                .stream()
+                .map(productoMapper::toResponse)
+                .toList();
+    }
+
     // ACTUALIZAR
     @Override
     @Transactional
