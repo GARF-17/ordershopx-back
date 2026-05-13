@@ -59,54 +59,123 @@ public class PedidoServiceImpl implements IPedidoService {
 
         Usuario usuario = getUsuarioAutenticado();
 
-        Cliente cliente = clienteRepository.findById(usuario.getUsuarioId())
-                .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
+        Cliente cliente = clienteRepository.findByUsuario(usuario)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Cliente no encontrado"));
 
-        Restaurante restaurante = restauranteRepository.findById(request.getIdRestaurante())
-                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
+        Restaurante restaurante = restauranteRepository
+                .findById(request.getIdRestaurante())
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Restaurante no encontrado"));
 
-        List<EstadoPedido> estadosActivos = List.of(
-                EstadoPedido.EN_COLA,
-                EstadoPedido.PREPARANDO
-        );
+        // ==========================================
+        // BUSCAR PEDIDO ACTIVO DEL MISMO RESTAURANTE
+        // ==========================================
+        Optional<Pedido> pedidoActivoOpt =
+                pedidoRepository
+                        .findFirstByCliente_IdUsuarioAndRestaurante_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(
+                                usuario.getUsuarioId(),
+                                restaurante.getIdUsuario(),
+                                List.of(
+                                        EstadoPedido.EN_COLA,
+                                        EstadoPedido.PREPARANDO
+                                )
+                        );
 
-        long pedidosActivos = pedidoRepository.countPedidosActivos(
-                restaurante.getIdUsuario(),
-                estadosActivos
-        );
+        Pedido pedido;
 
-        int orden = PedidoDomainService.calcularOrden(pedidosActivos);
-        int tiempo = PedidoDomainService.calcularTiempo(
-                orden,
-                restaurante.getTiempoPreparacionMin()
-        );
+        // ==========================================
+        // SI EXISTE -> REUTILIZAR PEDIDO
+        // ==========================================
+        if (pedidoActivoOpt.isPresent()) {
 
-        OffsetDateTime horaEstimada = OffsetDateTime.now().plusMinutes(tiempo);
+            pedido = pedidoActivoOpt.get();
 
-        Pedido pedido = new Pedido();
-        pedido.setIdPedido(UUID.randomUUID());
-        pedido.setCliente(cliente);
-        pedido.setRestaurante(restaurante);
-        pedido.setCodigoRecojo(generarCodigo());
-        pedido.setEstado(EstadoPedido.EN_COLA);
-        pedido.setOrdenCola(orden);
-        pedido.setTiempoEstimadoMin(tiempo);
-        pedido.setHoraEstimadaRecojo(horaEstimada);
-        pedido.setNotasCliente(request.getNotasCliente());
+        } else {
 
-        BigDecimal subtotal = BigDecimal.ZERO;
+            // ==========================================
+            // CREAR NUEVO PEDIDO
+            // ==========================================
+            List<EstadoPedido> estadosActivos = List.of(
+                    EstadoPedido.EN_COLA,
+                    EstadoPedido.PREPARANDO
+            );
 
+            long pedidosActivos = pedidoRepository.countPedidosActivos(
+                    restaurante.getIdUsuario(),
+                    estadosActivos
+            );
+
+            int orden = PedidoDomainService.calcularOrden(pedidosActivos);
+
+            int tiempo = PedidoDomainService.calcularTiempo(
+                    orden,
+                    restaurante.getTiempoPreparacionMin()
+            );
+
+            OffsetDateTime horaEstimada = OffsetDateTime.now()
+                    .plusMinutes(tiempo);
+
+            pedido = new Pedido();
+
+            pedido.setIdPedido(UUID.randomUUID());
+            pedido.setCliente(cliente);
+            pedido.setRestaurante(restaurante);
+            pedido.setCodigoRecojo(generarCodigo());
+            pedido.setEstado(EstadoPedido.EN_COLA);
+            pedido.setOrdenCola(orden);
+            pedido.setTiempoEstimadoMin(tiempo);
+            pedido.setHoraEstimadaRecojo(horaEstimada);
+            pedido.setNotasCliente(request.getNotasCliente());
+
+            pedido.setSubtotal(BigDecimal.ZERO);
+            pedido.setImpuestoIgv(BigDecimal.ZERO);
+            pedido.setTotal(BigDecimal.ZERO);
+        }
+
+        // ==========================================
+        // SUBTOTAL ACTUAL
+        // ==========================================
+        BigDecimal subtotal = pedido.getSubtotal();
+
+        // ==========================================
+        // AGREGAR ITEMS
+        // ==========================================
         for (PedidoItemRequestDTO item : request.getItems()) {
 
-            Producto producto = productoRepository.findById(item.getIdProducto())
-                    .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+            Producto producto = productoRepository
+                    .findById(item.getIdProducto())
+                    .orElseThrow(() ->
+                            new ResourceNotFoundException(
+                                    "Producto no encontrado"
+                            ));
 
-            if (producto.getStock() < item.getCantidad()) {
-                throw new IllegalStateException("Stock insuficiente: " + producto.getNombre());
+            // STOCK AGOTADO
+            if (
+                    !Boolean.TRUE.equals(producto.getEstaDisponible()) ||
+                            producto.getStock() == null ||
+                            producto.getStock() <= 0
+            ) {
+
+                throw new IllegalStateException(
+                        "Stock agotado para: " + producto.getNombre()
+                );
             }
 
-            producto.setStock(producto.getStock() - item.getCantidad());
+            // STOCK INSUFICIENTE
+            if (producto.getStock() < item.getCantidad()) {
 
+                throw new IllegalStateException(
+                        "Stock insuficiente para: " + producto.getNombre()
+                );
+            }
+
+            // DESCONTAR STOCK
+            producto.setStock(
+                    producto.getStock() - item.getCantidad()
+            );
+
+            // SI YA NO HAY STOCK -> DESHABILITAR
             if (producto.getStock() <= 0) {
                 producto.setEstaDisponible(false);
             }
@@ -124,9 +193,13 @@ public class PedidoServiceImpl implements IPedidoService {
                     .build();
 
             pedido.getDetalles().add(detalle);
+
             subtotal = subtotal.add(sub);
         }
 
+        // ==========================================
+        // RECALCULAR TOTALES
+        // ==========================================
         BigDecimal igv = PedidoDomainService.calcularIgv(subtotal);
 
         pedido.setSubtotal(subtotal);
@@ -135,9 +208,14 @@ public class PedidoServiceImpl implements IPedidoService {
 
         Pedido saved = pedidoRepository.save(pedido);
 
-        registrarHistorial(saved);
+        // ==========================================
+        // REGISTRAR HISTORIAL SOLO SI ES NUEVO
+        // ==========================================
+        if (pedidoActivoOpt.isEmpty()) {
+            registrarHistorial(saved);
+        }
 
-        return mapResponse(saved, false);
+        return mapResponse(saved, true);
     }
 
     // OBTENER PEDIDO

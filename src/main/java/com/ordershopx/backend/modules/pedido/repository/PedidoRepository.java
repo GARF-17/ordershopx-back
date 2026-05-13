@@ -39,6 +39,14 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
 
     boolean existsByCodigoRecojo(String codigoRecojo);
 
+    boolean existsByCliente_IdUsuarioAndEstadoIn(UUID idCliente, List<EstadoPedido> estados);
+
+    Optional<Pedido> findFirstByCliente_IdUsuarioAndRestaurante_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(
+            UUID idCliente,
+            UUID idRestaurante,
+            List<EstadoPedido> estados
+    );
+
     // MÉTRICA CLAVE (COLA)
 
     @Query("""
