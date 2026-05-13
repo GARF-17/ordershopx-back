@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
         return MDC.get("traceId");
     }
 
-
+    // VALIDACIONES DTO
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Object>> handleValidationExceptions(
             MethodArgumentNotValidException ex,
@@ -185,6 +185,29 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.value(),
                         request.getRequestURI(),
                         "ARG_400"
+                )
+        );
+    }
+
+    // ESTADOS INVÁLIDOS
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<Object>> handleIllegalState(
+            IllegalStateException ex,
+            HttpServletRequest request) {
+
+        log.warn("traceId={} event=api_error_illegal_state method={} path={} message={}",
+                traceId(),
+                request.getMethod(),
+                request.getRequestURI(),
+                ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                ApiResponse.error(
+                        ex.getMessage(),
+                        null,
+                        HttpStatus.BAD_REQUEST.value(),
+                        request.getRequestURI(),
+                        "STATE_400"
                 )
         );
     }
