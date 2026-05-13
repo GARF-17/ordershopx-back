@@ -65,6 +65,22 @@ public class ProductoController {
         );
     }
 
+    // LISTAR PRODUCTOS PARA CLIENTE
+    @GetMapping("/restaurante/{idRestaurante}")
+    public ResponseEntity<ApiResponse<List<ProductoResponseDTO>>> listarProductosCliente(
+            @PathVariable UUID idRestaurante
+    ) {
+
+        log.info("event=api_listar_productos_cliente restauranteId={}", idRestaurante);
+
+        List<ProductoResponseDTO> response =
+                productoService.listarProductosCliente(idRestaurante);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response, "Productos obtenidos correctamente")
+        );
+    }
+
     // ACTUALIZAR PRODUCTO
     @PutMapping("/{idProducto}")
     public ResponseEntity<ApiResponse<ProductoResponseDTO>> actualizarProducto(

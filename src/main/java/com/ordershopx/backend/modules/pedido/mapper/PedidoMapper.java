@@ -10,7 +10,10 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface PedidoMapper {
 
-
+    @Mapping(target = "idRestaurante",
+            source = "restaurante.idUsuario")
+    @Mapping(target = "nombreRestaurante",
+            source = "restaurante.nombreComercial")
     PedidoResponseDTO toResponse(Pedido pedido);
 
     List<PedidoResponseDTO> toResponseList(List<Pedido> pedidos);

@@ -4,6 +4,7 @@ import com.ordershopx.backend.shared.security.jwt.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -23,23 +24,26 @@ public class SecurityConfig {
     private final UserDetailsService userDetailsService;
 
     @Bean
-    public PasswordEncoder passwordEncoder(){
+    public PasswordEncoder passwordEncoder() {
+
         return new BCryptPasswordEncoder();
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception{
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
 
-                // JWT = stateless
+                // JWT = STATELESS
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
                 .authorizeHttpRequests(auth -> auth
 
+                        // PUBLICOS
                         // PERMITIR PETICIONES
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
 
@@ -47,6 +51,29 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/usuarios/**").permitAll()
 
+                        // ADMIN
+                        .requestMatchers("/api/v1/admin/**")
+                        .hasRole("ADMINISTRADOR")
+
+                        // RESTAURANTES GET
+                        .requestMatchers(HttpMethod.GET, "/api/v1/restaurantes/**")
+                        .hasAnyRole("COMENSAL", "RESTAURANTE")
+
+                        // PRODUCTOS GET
+                        .requestMatchers(HttpMethod.GET, "/api/v1/productos/**")
+                        .hasAnyRole("COMENSAL", "RESTAURANTE")
+
+                        // RESTAURANTE CRUD
+                        .requestMatchers("/api/v1/restaurantes/**")
+                        .hasRole("RESTAURANTE")
+
+                        // PRODUCTOS CRUD
+                        .requestMatchers("/api/v1/productos/**")
+                        .hasRole("RESTAURANTE")
+
+                        // CLIENTES
+                        .requestMatchers("/api/v1/clientes/**")
+                        .hasRole("COMENSAL")
                         // PROTECCIÓN POR ROLES
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMINISTRADOR")
                         .requestMatchers("/api/v1/restaurantes/**").hasRole("RESTAURANTE")
@@ -55,11 +82,14 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
-                // conecta UserDetailsService
+                // USER DETAILS
                 .userDetailsService(userDetailsService)
 
-                // filtro JWT
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                // JWT FILTER
+                .addFilterBefore(
+                        jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }

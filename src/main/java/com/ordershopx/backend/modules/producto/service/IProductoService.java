@@ -14,6 +14,8 @@ public interface IProductoService {
 
     List<ProductoResponseDTO> listarPorCategoria(UUID idCategoria);
 
+    List<ProductoResponseDTO> listarProductosCliente(UUID idRestaurante);
+
     ProductoResponseDTO actualizarProducto(UUID idProducto, ProductoRequestDTO request);
 
     void eliminarProducto(UUID idProducto);

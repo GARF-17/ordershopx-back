@@ -24,6 +24,10 @@ public class PedidoResponseDTO {
 
     private EstadoPagoGlobal estadoPago;
 
+    private UUID idRestaurante;
+
+    private String nombreRestaurante;
+
     private Integer ordenCola;
 
     private Integer tiempoEstimadoMin;
