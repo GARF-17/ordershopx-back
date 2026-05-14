@@ -81,7 +81,9 @@ public class Pedido extends BaseEntity {
     @Column(name = "notas_cliente")
     private String notasCliente;
 
-    // MÉTODOS HELPER (
+    @Column(name = "horario_recojo_seleccionado")
+    private OffsetDateTime horarioRecojoSeleccionado;
+
     public void addDetalle(DetallePedido detalle) {
         detalles.add(detalle);
         detalle.setPedido(this);
