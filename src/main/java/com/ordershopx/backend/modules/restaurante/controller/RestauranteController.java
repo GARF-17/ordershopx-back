@@ -2,6 +2,7 @@ package com.ordershopx.backend.modules.restaurante.controller;
 
 import com.ordershopx.backend.modules.restaurante.dto.request.RestauranteRequestDTO;
 import com.ordershopx.backend.modules.restaurante.dto.request.UbicacionRestauranteRequestDTO;
+import com.ordershopx.backend.modules.restaurante.dto.response.HorarioDisponibleDTO;
 import com.ordershopx.backend.modules.restaurante.dto.response.RestauranteResponseDTO;
 import com.ordershopx.backend.modules.restaurante.service.IRestauranteService;
 import com.ordershopx.backend.shared.response.ApiResponse;
@@ -14,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/restaurantes")
@@ -91,6 +93,18 @@ public class RestauranteController {
 
         return ResponseEntity.ok(
                 ApiResponse.success(null, "Estado actualizado correctamente")
+        );
+    }
+
+    // HORARIOS DISPONIBLES
+    @GetMapping("/{id}/horarios")
+    public ResponseEntity<List<HorarioDisponibleDTO>>
+    listarHorariosDisponibles(
+            @PathVariable UUID id
+    ) {
+
+        return ResponseEntity.ok(
+                restauranteService.listarHorariosDisponibles(id)
         );
     }
 }

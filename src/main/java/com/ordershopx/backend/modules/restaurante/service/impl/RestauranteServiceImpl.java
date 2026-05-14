@@ -1,14 +1,15 @@
 package com.ordershopx.backend.modules.restaurante.service.impl;
 
-import com.ordershopx.backend.modules.restaurante.dto.request.RestauranteRequestDTO;
-import com.ordershopx.backend.modules.restaurante.dto.request.UbicacionRestauranteRequestDTO;
-import com.ordershopx.backend.modules.restaurante.dto.response.RestauranteResponseDTO;
+import com.ordershopx.backend.modules.pedido.repository.PedidoRepository;
+import com.ordershopx.backend.modules.restaurante.dto.request.*;
+import com.ordershopx.backend.modules.restaurante.dto.response.*;
 import com.ordershopx.backend.modules.restaurante.entity.Restaurante;
 import com.ordershopx.backend.modules.restaurante.mapper.RestauranteMapper;
 import com.ordershopx.backend.modules.restaurante.repository.RestauranteRepository;
 import com.ordershopx.backend.modules.restaurante.service.IRestauranteService;
 import com.ordershopx.backend.modules.usuario.entity.Usuario;
 import com.ordershopx.backend.modules.usuario.service.IUsuarioService;
+import com.ordershopx.backend.shared.enums.EstadoPedido;
 import com.ordershopx.backend.shared.enums.EstadoRestaurante;
 import com.ordershopx.backend.shared.exception.ResourceNotFoundException;
 
@@ -19,7 +20,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +33,7 @@ public class RestauranteServiceImpl implements IRestauranteService {
     private final RestauranteRepository restauranteRepository;
     private final RestauranteMapper restauranteMapper;
     private final IUsuarioService usuarioService;
+    private final PedidoRepository pedidoRepository;
 
     private Usuario getUsuarioAutenticado() {
         String correo = SecurityContextHolder.getContext()
@@ -38,38 +43,82 @@ public class RestauranteServiceImpl implements IRestauranteService {
         return usuarioService.obtenerPorCorreo(correo);
     }
 
-    // OBTENER MI RESTAURANTE
+    // LISTAR HORARIOS DISPONIBLES
     @Override
     @Transactional(readOnly = true)
+    public List<HorarioDisponibleDTO> listarHorariosDisponibles(UUID idRestaurante) {
+
+        Restaurante restaurante = restauranteRepository
+                .findById(idRestaurante)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Restaurante no encontrado")
+                );
+
+        int tiempoMin = restaurante.getTiempoPreparacionMin() != null
+                ? restaurante.getTiempoPreparacionMin()
+                : 10;
+
+        int capacidad = restaurante.getCapacidadCocina() != null
+                ? restaurante.getCapacidadCocina()
+                : 5;
+
+        List<HorarioDisponibleDTO> horarios = new ArrayList<>();
+
+        OffsetDateTime ahora = OffsetDateTime.now()
+                .withSecond(0)
+                .withNano(0)
+                .plusMinutes(tiempoMin);
+
+        OffsetDateTime inicio = ahora
+                .withMinute((ahora.getMinute() / 10) * 10);
+
+        for (int i = 0; i < 12; i++) {
+
+            OffsetDateTime horario = inicio.plusMinutes(i * 10L)
+                    .withSecond(0)
+                    .withNano(0);
+
+            OffsetDateTime inicioSlot = horario;
+            OffsetDateTime finSlot = horario.plusMinutes(10);
+
+            long pedidos = pedidoRepository.countByHorarioRango(
+                    idRestaurante,
+                    List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO),
+                    inicioSlot,
+                    finSlot
+            );
+
+            boolean disponible = pedidos < capacidad;
+
+            horarios.add(
+                    HorarioDisponibleDTO.builder()
+                            .hora(horario)
+                            .cuposDisponibles(Math.max(0, capacidad - (int) pedidos))
+                            .disponible(disponible)
+                            .build()
+            );
+        }
+
+        return horarios;
+    }
+
+    // OBTENER MI RESTAURANTE
+    @Override
     public RestauranteResponseDTO obtenerMiRestaurante() {
 
         Usuario usuario = getUsuarioAutenticado();
-
-        log.info("event=obtener_restaurante_start usuario={}", usuario.getCorreoElectronico());
-
-        Restaurante restaurante = restauranteRepository.findById(usuario.getUsuarioId())
-                .orElseThrow(() -> {
-                    log.warn("event=restaurante_not_found usuario={}", usuario.getCorreoElectronico());
-                    return new ResourceNotFoundException("Restaurante no encontrado");
-                });
-
-        log.info("event=obtener_restaurante_success usuario={}", usuario.getCorreoElectronico());
+        Restaurante restaurante = restauranteRepository
+                .findById(usuario.getUsuarioId())
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
 
         return restauranteMapper.toResponse(restaurante);
     }
 
     // LISTAR RESTAURANTES
     @Override
-    @Transactional(readOnly = true)
     public List<RestauranteResponseDTO> listarRestaurantes() {
-
-        log.info("event=listar_restaurantes_start");
-
-        List<Restaurante> restaurantes = restauranteRepository.findAll();
-
-        log.info("event=listar_restaurantes_success total={}", restaurantes.size());
-
-        return restaurantes.stream()
+        return restauranteRepository.findAll()
+                .stream()
                 .map(restauranteMapper::toResponse)
                 .toList();
     }
@@ -81,13 +130,9 @@ public class RestauranteServiceImpl implements IRestauranteService {
 
         Usuario usuario = getUsuarioAutenticado();
 
-        log.info("event=actualizar_restaurante_start usuario={}", usuario.getCorreoElectronico());
-
-        Restaurante restaurante = restauranteRepository.findById(usuario.getUsuarioId())
-                .orElseThrow(() -> {
-                    log.warn("event=restaurante_not_found usuario={}", usuario.getCorreoElectronico());
-                    return new ResourceNotFoundException("Restaurante no encontrado");
-                });
+        Restaurante restaurante = restauranteRepository
+                .findById(usuario.getUsuarioId())
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
 
         restaurante.setNombreComercial(request.getNombreComercial());
         restaurante.setRazonSocial(request.getRazonSocial());
@@ -97,8 +142,6 @@ public class RestauranteServiceImpl implements IRestauranteService {
         restaurante.setCapacidadCocina(request.getCapacidadCocina());
 
         restauranteRepository.save(restaurante);
-
-        log.info("event=actualizar_restaurante_success usuario={}", usuario.getCorreoElectronico());
 
         return restauranteMapper.toResponse(restaurante);
     }
@@ -110,20 +153,14 @@ public class RestauranteServiceImpl implements IRestauranteService {
 
         Usuario usuario = getUsuarioAutenticado();
 
-        log.info("event=actualizar_ubicacion_restaurante_start usuario={}", usuario.getCorreoElectronico());
-
-        Restaurante restaurante = restauranteRepository.findById(usuario.getUsuarioId())
-                .orElseThrow(() -> {
-                    log.warn("event=restaurante_not_found usuario={}", usuario.getCorreoElectronico());
-                    return new ResourceNotFoundException("Restaurante no encontrado");
-                });
+        Restaurante restaurante = restauranteRepository
+                .findById(usuario.getUsuarioId())
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
 
         restaurante.setLatitud(request.getLatitud());
         restaurante.setLongitud(request.getLongitud());
 
         restauranteRepository.save(restaurante);
-
-        log.info("event=actualizar_ubicacion_restaurante_success usuario={}", usuario.getCorreoElectronico());
     }
 
     // CAMBIAR ESTADO
@@ -133,38 +170,25 @@ public class RestauranteServiceImpl implements IRestauranteService {
 
         Usuario usuario = getUsuarioAutenticado();
 
-        log.info("event=cambiar_estado_start usuario={} estado={}",
-                usuario.getCorreoElectronico(), estado);
+        Restaurante restaurante = restauranteRepository
+                .findById(usuario.getUsuarioId())
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
 
-        Restaurante restaurante = restauranteRepository.findById(usuario.getUsuarioId())
-                .orElseThrow(() -> {
-                    log.warn("event=restaurante_not_found usuario={}", usuario.getCorreoElectronico());
-                    return new ResourceNotFoundException("Restaurante no encontrado");
-                });
-
-        try {
-            restaurante.setEstado(EstadoRestaurante.valueOf(estado));
-        } catch (IllegalArgumentException e) {
-            log.warn("event=estado_invalido estado={}", estado);
-            throw new IllegalArgumentException("Estado inválido");
-        }
+        restaurante.setEstado(EstadoRestaurante.valueOf(estado));
 
         restauranteRepository.save(restaurante);
-
-        log.info("event=cambiar_estado_success usuario={} estado={}",
-                usuario.getCorreoElectronico(), estado);
     }
 
     // CREAR DESDE REGISTER
     @Override
     @Transactional
-    public void crearDesdeRegister(Usuario usuario,
-                                   String nombreComercial,
-                                   String razonSocial,
-                                   String ruc,
-                                   String direccionFiscal) {
-
-        log.info("event=crear_restaurante_register usuario={}", usuario.getCorreoElectronico());
+    public void crearDesdeRegister(
+            Usuario usuario,
+            String nombreComercial,
+            String razonSocial,
+            String ruc,
+            String direccionFiscal
+    ) {
 
         Restaurante restaurante = Restaurante.builder()
                 .usuario(usuario)
@@ -172,11 +196,12 @@ public class RestauranteServiceImpl implements IRestauranteService {
                 .razonSocial(razonSocial)
                 .ruc(ruc)
                 .direccionFiscal(direccionFiscal)
+                .tiempoPreparacionMin(10)
+                .tiempoPreparacionMax(20)
+                .capacidadCocina(5)
                 .estado(EstadoRestaurante.ABIERTO)
                 .build();
 
         restauranteRepository.save(restaurante);
-
-        log.info("event=crear_restaurante_register_success usuario={}", usuario.getCorreoElectronico());
     }
 }
