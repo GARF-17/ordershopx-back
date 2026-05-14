@@ -2,16 +2,20 @@ package com.ordershopx.backend.modules.restaurante.service;
 
 import com.ordershopx.backend.modules.restaurante.dto.request.RestauranteRequestDTO;
 import com.ordershopx.backend.modules.restaurante.dto.request.UbicacionRestauranteRequestDTO;
+import com.ordershopx.backend.modules.restaurante.dto.response.HorarioDisponibleDTO;
 import com.ordershopx.backend.modules.restaurante.dto.response.RestauranteResponseDTO;
 import com.ordershopx.backend.modules.usuario.entity.Usuario;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface IRestauranteService {
 
     RestauranteResponseDTO obtenerMiRestaurante();
 
     List<RestauranteResponseDTO> listarRestaurantes();
+
+    List<HorarioDisponibleDTO> listarHorariosDisponibles(UUID idRestaurante);
 
     RestauranteResponseDTO actualizarRestaurante(RestauranteRequestDTO request);
 
@@ -21,6 +25,5 @@ public interface IRestauranteService {
 
     void crearDesdeRegister(Usuario usuario, String nombreComercial,
                             String razonSocial, String ruc, String direccionFiscal);
-
 
 }

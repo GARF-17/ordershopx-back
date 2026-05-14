@@ -3,6 +3,7 @@ package com.ordershopx.backend.modules.pedido.dto.request;
 import jakarta.validation.constraints.*;
 import lombok.*;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,4 +22,7 @@ public class PedidoRequestDTO {
 
     @Size(max = 255, message = "Máximo 255 caracteres en notas")
     private String notasCliente;
+
+    @NotNull(message = "Debe seleccionar un horario")
+    private OffsetDateTime horarioRecojoSeleccionado;
 }

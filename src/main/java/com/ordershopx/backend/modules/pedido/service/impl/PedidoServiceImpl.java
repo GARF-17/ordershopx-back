@@ -18,7 +18,6 @@ import com.ordershopx.backend.modules.usuario.service.IUsuarioService;
 import com.ordershopx.backend.shared.enums.EstadoPedido;
 import com.ordershopx.backend.shared.exception.ResourceNotFoundException;
 
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -45,10 +44,7 @@ public class PedidoServiceImpl implements IPedidoService {
     private final IUsuarioService usuarioService;
 
     private Usuario getUsuarioAutenticado() {
-        String correo = SecurityContextHolder.getContext()
-                .getAuthentication()
-                .getName();
-
+        String correo = SecurityContextHolder.getContext().getAuthentication().getName();
         return usuarioService.obtenerPorCorreo(correo);
     }
 
@@ -60,64 +56,63 @@ public class PedidoServiceImpl implements IPedidoService {
         Usuario usuario = getUsuarioAutenticado();
 
         Cliente cliente = clienteRepository.findByUsuario(usuario)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Cliente no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
 
-        Restaurante restaurante = restauranteRepository
-                .findById(request.getIdRestaurante())
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Restaurante no encontrado"));
+        Restaurante restaurante = restauranteRepository.findById(request.getIdRestaurante())
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
 
-        // ==========================================
-        // BUSCAR PEDIDO ACTIVO DEL MISMO RESTAURANTE
-        // ==========================================
+        List<EstadoPedido> estadosActivos = List.of(
+                EstadoPedido.EN_COLA,
+                EstadoPedido.PREPARANDO
+        );
+
+        OffsetDateTime horarioCliente = request.getHorarioRecojoSeleccionado();
+
+        OffsetDateTime inicio = horarioCliente
+                .withSecond(0)
+                .withNano(0)
+                .withMinute((horarioCliente.getMinute() / 10) * 10);
+
+        OffsetDateTime fin = inicio.plusMinutes(10);
+
+        pedidoRepository.lockRestaurante(
+                restaurante.getIdUsuario()
+        );
+
+        long pedidosEnSlot = pedidoRepository.countByHorarioRango(
+                restaurante.getIdUsuario(),
+                estadosActivos,
+                inicio,
+                fin
+        );
+
+        if (pedidosEnSlot >= restaurante.getCapacidadCocina()) {
+            throw new IllegalStateException("Slot de horario saturado");
+        }
+
         Optional<Pedido> pedidoActivoOpt =
-                pedidoRepository
-                        .findFirstByCliente_IdUsuarioAndRestaurante_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(
-                                usuario.getUsuarioId(),
-                                restaurante.getIdUsuario(),
-                                List.of(
-                                        EstadoPedido.EN_COLA,
-                                        EstadoPedido.PREPARANDO
-                                )
-                        );
+                pedidoRepository.findFirstByCliente_IdUsuarioAndRestaurante_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(
+                        usuario.getUsuarioId(),
+                        restaurante.getIdUsuario(),
+                        estadosActivos
+                );
 
         Pedido pedido;
 
-        // ==========================================
-        // SI EXISTE -> REUTILIZAR PEDIDO
-        // ==========================================
         if (pedidoActivoOpt.isPresent()) {
-
             pedido = pedidoActivoOpt.get();
-
         } else {
 
-            // ==========================================
-            // CREAR NUEVO PEDIDO
-            // ==========================================
-            List<EstadoPedido> estadosActivos = List.of(
-                    EstadoPedido.EN_COLA,
-                    EstadoPedido.PREPARANDO
-            );
-
-            long pedidosActivos = pedidoRepository.countPedidosActivos(
-                    restaurante.getIdUsuario(),
-                    estadosActivos
-            );
-
-            int orden = PedidoDomainService.calcularOrden(pedidosActivos);
+            int orden = PedidoDomainService.calcularOrden(pedidosEnSlot);
 
             int tiempo = PedidoDomainService.calcularTiempo(
                     orden,
                     restaurante.getTiempoPreparacionMin()
             );
 
-            OffsetDateTime horaEstimada = OffsetDateTime.now()
-                    .plusMinutes(tiempo);
+            OffsetDateTime horaEstimada = OffsetDateTime.now().plusMinutes(tiempo);
 
             pedido = new Pedido();
-
             pedido.setIdPedido(UUID.randomUUID());
             pedido.setCliente(cliente);
             pedido.setRestaurante(restaurante);
@@ -126,56 +121,35 @@ public class PedidoServiceImpl implements IPedidoService {
             pedido.setOrdenCola(orden);
             pedido.setTiempoEstimadoMin(tiempo);
             pedido.setHoraEstimadaRecojo(horaEstimada);
-            pedido.setNotasCliente(request.getNotasCliente());
 
+            // GUARDAR HORARIO DE RECOJO SELECCIONADO
+            pedido.setHorarioRecojoSeleccionado(inicio);
+
+            pedido.setNotasCliente(request.getNotasCliente());
             pedido.setSubtotal(BigDecimal.ZERO);
             pedido.setImpuestoIgv(BigDecimal.ZERO);
             pedido.setTotal(BigDecimal.ZERO);
         }
 
-        // ==========================================
-        // SUBTOTAL ACTUAL
-        // ==========================================
         BigDecimal subtotal = pedido.getSubtotal();
 
-        // ==========================================
-        // AGREGAR ITEMS
-        // ==========================================
         for (PedidoItemRequestDTO item : request.getItems()) {
 
-            Producto producto = productoRepository
-                    .findById(item.getIdProducto())
-                    .orElseThrow(() ->
-                            new ResourceNotFoundException(
-                                    "Producto no encontrado"
-                            ));
+            Producto producto = productoRepository.findById(item.getIdProducto())
+                    .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
 
-            // STOCK AGOTADO
-            if (
-                    !Boolean.TRUE.equals(producto.getEstaDisponible()) ||
-                            producto.getStock() == null ||
-                            producto.getStock() <= 0
-            ) {
-
-                throw new IllegalStateException(
-                        "Stock agotado para: " + producto.getNombre()
-                );
+            if (!Boolean.TRUE.equals(producto.getEstaDisponible())
+                    || producto.getStock() == null
+                    || producto.getStock() <= 0) {
+                throw new IllegalStateException("Stock agotado para: " + producto.getNombre());
             }
 
-            // STOCK INSUFICIENTE
             if (producto.getStock() < item.getCantidad()) {
-
-                throw new IllegalStateException(
-                        "Stock insuficiente para: " + producto.getNombre()
-                );
+                throw new IllegalStateException("Stock insuficiente para: " + producto.getNombre());
             }
 
-            // DESCONTAR STOCK
-            producto.setStock(
-                    producto.getStock() - item.getCantidad()
-            );
+            producto.setStock(producto.getStock() - item.getCantidad());
 
-            // SI YA NO HAY STOCK -> DESHABILITAR
             if (producto.getStock() <= 0) {
                 producto.setEstaDisponible(false);
             }
@@ -193,24 +167,34 @@ public class PedidoServiceImpl implements IPedidoService {
                     .build();
 
             pedido.getDetalles().add(detalle);
-
             subtotal = subtotal.add(sub);
         }
 
-        // ==========================================
-        // RECALCULAR TOTALES
-        // ==========================================
         BigDecimal igv = PedidoDomainService.calcularIgv(subtotal);
 
         pedido.setSubtotal(subtotal);
         pedido.setImpuestoIgv(igv);
         pedido.setTotal(subtotal.add(igv));
 
+        if (pedidoActivoOpt.isPresent()) {
+
+            int cantidadItems = pedido.getDetalles()
+                    .stream()
+                    .mapToInt(DetallePedido::getCantidad)
+                    .sum();
+
+            int tiempoExtra = Math.max(0, cantidadItems - 1) * 2;
+
+            int nuevoTiempo = restaurante.getTiempoPreparacionMin() + tiempoExtra;
+
+            nuevoTiempo = Math.min(nuevoTiempo, restaurante.getTiempoPreparacionMax());
+
+            pedido.setTiempoEstimadoMin(nuevoTiempo);
+            pedido.setHoraEstimadaRecojo(OffsetDateTime.now().plusMinutes(nuevoTiempo));
+        }
+
         Pedido saved = pedidoRepository.save(pedido);
 
-        // ==========================================
-        // REGISTRAR HISTORIAL SOLO SI ES NUEVO
-        // ==========================================
         if (pedidoActivoOpt.isEmpty()) {
             registrarHistorial(saved);
         }
@@ -221,40 +205,26 @@ public class PedidoServiceImpl implements IPedidoService {
     // OBTENER PEDIDO
     @Override
     public PedidoResponseDTO obtenerPedido(UUID idPedido, boolean incluirHistorial) {
-
         Pedido pedido = pedidoRepository.findById(idPedido)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
-
         return mapResponse(pedido, incluirHistorial);
     }
 
-    // LISTAR CLIENTE PEDIDOS
     @Override
     public List<PedidoResponseDTO> listarPedidosCliente() {
-
         Usuario usuario = getUsuarioAutenticado();
-
-        return pedidoRepository
-                .findByCliente_IdUsuarioOrderByFechaCreacionDesc(usuario.getUsuarioId())
-                .stream()
-                .map(p -> mapResponse(p, false))
-                .toList();
+        return pedidoRepository.findByCliente_IdUsuarioOrderByFechaCreacionDesc(usuario.getUsuarioId())
+                .stream().map(p -> mapResponse(p, false)).toList();
     }
 
-    // LISTAR COLA RESTAURANTE
+    // LISTAR PEDIDOS DE RESTAURANTE
     @Override
     public List<PedidoResponseDTO> listarColaRestaurante() {
-
         Usuario usuario = getUsuarioAutenticado();
-
-        return pedidoRepository
-                .findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
-                        usuario.getUsuarioId(),
-                        List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO)
-                )
-                .stream()
-                .map(p -> mapResponse(p, false))
-                .toList();
+        return pedidoRepository.findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
+                usuario.getUsuarioId(),
+                List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO)
+        ).stream().map(p -> mapResponse(p, false)).toList();
     }
 
     // CAMBIAR ESTADO
@@ -270,13 +240,12 @@ public class PedidoServiceImpl implements IPedidoService {
         }
 
         pedido.setEstado(request.getEstado());
-
         registrarHistorial(pedido);
 
         return mapResponse(pedido, true);
     }
 
-    // VALIDACIÓN DE TRANSICIONES DE ESTADO
+    // UTILIDADES
     private boolean esTransicionValida(EstadoPedido actual, EstadoPedido nuevo) {
 
         Map<EstadoPedido, Set<EstadoPedido>> reglas = Map.of(
@@ -291,7 +260,6 @@ public class PedidoServiceImpl implements IPedidoService {
         return reglas.getOrDefault(actual, Set.of()).contains(nuevo);
     }
 
-    // REGISTRAR HISTORIAL
     private void registrarHistorial(Pedido pedido) {
         historialRepository.save(
                 HistorialPedido.builder()
@@ -305,8 +273,8 @@ public class PedidoServiceImpl implements IPedidoService {
     private String generarCodigo() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         SecureRandom random = new SecureRandom();
-
         String codigo;
+
         do {
             StringBuilder sb = new StringBuilder(6);
             for (int i = 0; i < 6; i++) {
@@ -322,7 +290,6 @@ public class PedidoServiceImpl implements IPedidoService {
 
         PedidoResponseDTO dto = pedidoMapper.toResponse(pedido);
         dto.setItems(pedidoMapper.toDetalleList(pedido.getDetalles()));
-
         if (incluirHistorial) {
             dto.setHistorial(
                     pedidoMapper.toHistorialList(

@@ -3,9 +3,13 @@ package com.ordershopx.backend.modules.pedido.repository;
 import com.ordershopx.backend.modules.pedido.entity.Pedido;
 import com.ordershopx.backend.shared.enums.EstadoPedido;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import jakarta.persistence.LockModeType;
+
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,7 +28,7 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
 
     Optional<Pedido> findByIdPedidoAndCliente_IdUsuario(UUID idPedido, UUID idCliente);
 
-    //  RESTAURANTE
+    // RESTAURANTE
     List<Pedido> findByRestaurante_IdUsuarioOrderByFechaCreacionDesc(UUID idRestaurante);
 
     List<Pedido> findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
@@ -34,7 +38,8 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
 
     Optional<Pedido> findByIdPedidoAndRestaurante_IdUsuario(UUID idPedido, UUID idRestaurante);
 
-    // TRACKING / BÚSQUEDA
+    // CÓDIGOS DE RECOJO
+
     Optional<Pedido> findByCodigoRecojo(String codigoRecojo);
 
     boolean existsByCodigoRecojo(String codigoRecojo);
@@ -47,8 +52,7 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
             List<EstadoPedido> estados
     );
 
-    // MÉTRICA CLAVE (COLA)
-
+    // CAPACIDAD GLOBAL
     @Query("""
         SELECT COUNT(p)
         FROM Pedido p
@@ -59,4 +63,31 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
             @Param("idRestaurante") UUID idRestaurante,
             @Param("estados") List<EstadoPedido> estados
     );
+
+    // CAPACIDAD POR HORARIO
+    @Query("""
+        SELECT COUNT(p)
+        FROM Pedido p
+        WHERE p.restaurante.idUsuario = :idRestaurante
+        AND p.estado IN :estados
+        AND p.horarioRecojoSeleccionado >= :inicio
+        AND p.horarioRecojoSeleccionado < :fin
+    """)
+    long countByHorarioRango(
+            @Param("idRestaurante") UUID idRestaurante,
+            @Param("estados") List<EstadoPedido> estados,
+            @Param("inicio") OffsetDateTime inicio,
+            @Param("fin") OffsetDateTime fin
+    );
+
+    // CAPACIDAD POR HORARIO DE RECOJO SELECCIONADO
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT r.idUsuario
+        FROM Restaurante r
+        WHERE r.idUsuario = :idRestaurante
+    """)
+    UUID lockRestaurante(@Param("idRestaurante") UUID idRestaurante);
+
+
 }
