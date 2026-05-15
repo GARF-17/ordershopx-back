@@ -1,6 +1,7 @@
 package com.ordershopx.backend.modules.pedido.domain;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 public class PedidoDomainService {
@@ -19,6 +20,9 @@ public class PedidoDomainService {
     }
 
     public static BigDecimal calcularIgv(BigDecimal subtotal) {
-        return subtotal.multiply(new BigDecimal("0.18"));
+
+        return subtotal
+                .multiply(new BigDecimal("0.18"))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 }

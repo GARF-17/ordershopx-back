@@ -16,6 +16,7 @@ import com.ordershopx.backend.modules.pedido.service.IPedidoService;
 import com.ordershopx.backend.modules.usuario.entity.Usuario;
 import com.ordershopx.backend.modules.usuario.service.IUsuarioService;
 import com.ordershopx.backend.shared.enums.EstadoPedido;
+import com.ordershopx.backend.shared.enums.EstadoPagoGlobal;
 import com.ordershopx.backend.shared.exception.ResourceNotFoundException;
 
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -56,22 +58,35 @@ public class PedidoServiceImpl implements IPedidoService {
         Usuario usuario = getUsuarioAutenticado();
 
         Cliente cliente = clienteRepository.findByUsuario(usuario)
-                .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Cliente no encontrado"
+                        )
+                );
 
-        Restaurante restaurante = restauranteRepository.findById(request.getIdRestaurante())
-                .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
+        Restaurante restaurante = restauranteRepository.findById(
+                        request.getIdRestaurante()
+                )
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Restaurante no encontrado"
+                        )
+                );
 
         List<EstadoPedido> estadosActivos = List.of(
                 EstadoPedido.EN_COLA,
                 EstadoPedido.PREPARANDO
         );
 
-        OffsetDateTime horarioCliente = request.getHorarioRecojoSeleccionado();
+        OffsetDateTime horarioCliente =
+                request.getHorarioRecojoSeleccionado();
 
         OffsetDateTime inicio = horarioCliente
                 .withSecond(0)
                 .withNano(0)
-                .withMinute((horarioCliente.getMinute() / 10) * 10);
+                .withMinute(
+                        (horarioCliente.getMinute() / 10) * 10
+                );
 
         OffsetDateTime fin = inicio.plusMinutes(10);
 
@@ -79,125 +94,194 @@ public class PedidoServiceImpl implements IPedidoService {
                 restaurante.getIdUsuario()
         );
 
-        long pedidosEnSlot = pedidoRepository.countByHorarioRango(
-                restaurante.getIdUsuario(),
-                estadosActivos,
-                inicio,
-                fin
-        );
-
-        if (pedidosEnSlot >= restaurante.getCapacidadCocina()) {
-            throw new IllegalStateException("Slot de horario saturado");
-        }
-
-        Optional<Pedido> pedidoActivoOpt =
-                pedidoRepository.findFirstByCliente_IdUsuarioAndRestaurante_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(
-                        usuario.getUsuarioId(),
+        long pedidosEnSlot =
+                pedidoRepository.countByHorarioRango(
                         restaurante.getIdUsuario(),
-                        estadosActivos
+                        estadosActivos,
+                        inicio,
+                        fin
                 );
 
-        Pedido pedido;
+        if (pedidosEnSlot >= restaurante.getCapacidadCocina()) {
 
-        if (pedidoActivoOpt.isPresent()) {
-            pedido = pedidoActivoOpt.get();
-        } else {
-
-            int orden = PedidoDomainService.calcularOrden(pedidosEnSlot);
-
-            int tiempo = PedidoDomainService.calcularTiempo(
-                    orden,
-                    restaurante.getTiempoPreparacionMin()
+            throw new IllegalStateException(
+                    "Slot de horario saturado"
             );
-
-            OffsetDateTime horaEstimada = OffsetDateTime.now().plusMinutes(tiempo);
-
-            pedido = new Pedido();
-            pedido.setIdPedido(UUID.randomUUID());
-            pedido.setCliente(cliente);
-            pedido.setRestaurante(restaurante);
-            pedido.setCodigoRecojo(generarCodigo());
-            pedido.setEstado(EstadoPedido.EN_COLA);
-            pedido.setOrdenCola(orden);
-            pedido.setTiempoEstimadoMin(tiempo);
-            pedido.setHoraEstimadaRecojo(horaEstimada);
-
-            // GUARDAR HORARIO DE RECOJO SELECCIONADO
-            pedido.setHorarioRecojoSeleccionado(inicio);
-
-            pedido.setNotasCliente(request.getNotasCliente());
-            pedido.setSubtotal(BigDecimal.ZERO);
-            pedido.setImpuestoIgv(BigDecimal.ZERO);
-            pedido.setTotal(BigDecimal.ZERO);
         }
 
-        BigDecimal subtotal = pedido.getSubtotal();
+        // CREAR SIEMPRE UN NUEVO PEDIDO
+        int orden = PedidoDomainService.calcularOrden(
+                pedidosEnSlot
+        );
+
+        int tiempo = PedidoDomainService.calcularTiempo(
+                orden,
+                restaurante.getTiempoPreparacionMin()
+        );
+
+        OffsetDateTime horaEstimada =
+                OffsetDateTime.now().plusMinutes(tiempo);
+
+        Pedido pedido = new Pedido();
+
+        pedido.setIdPedido(UUID.randomUUID());
+
+        pedido.setCliente(cliente);
+
+        pedido.setRestaurante(restaurante);
+
+        pedido.setCodigoRecojo(
+                generarCodigo()
+        );
+
+        pedido.setEstado(
+                EstadoPedido.EN_COLA
+        );
+
+        pedido.setEstadoPago(
+                EstadoPagoGlobal.PENDIENTE
+        );
+
+        pedido.setOrdenCola(orden);
+
+        pedido.setTiempoEstimadoMin(tiempo);
+
+        pedido.setHoraEstimadaRecojo(
+                horaEstimada
+        );
+
+        pedido.setHorarioRecojoSeleccionado(
+                inicio
+        );
+
+        pedido.setNotasCliente(
+                request.getNotasCliente()
+        );
+
+        pedido.setSubtotal(BigDecimal.ZERO);
+        pedido.setImpuestoIgv(BigDecimal.ZERO);
+        pedido.setTotal(BigDecimal.ZERO);
+
+        // CALCULAR TOTALES
+        BigDecimal subtotal = BigDecimal.ZERO;
 
         for (PedidoItemRequestDTO item : request.getItems()) {
 
-            Producto producto = productoRepository.findById(item.getIdProducto())
-                    .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+            Producto producto =
+                    productoRepository.findById(
+                                    item.getIdProducto()
+                            )
+                            .orElseThrow(() ->
+                                    new ResourceNotFoundException(
+                                            "Producto no encontrado"
+                                    )
+                            );
 
-            if (!Boolean.TRUE.equals(producto.getEstaDisponible())
-                    || producto.getStock() == null
-                    || producto.getStock() <= 0) {
-                throw new IllegalStateException("Stock agotado para: " + producto.getNombre());
+            if (
+                    !Boolean.TRUE.equals(
+                            producto.getEstaDisponible()
+                    )
+                            || producto.getStock() == null
+                            || producto.getStock() <= 0
+            ) {
+
+                throw new IllegalStateException(
+                        "Stock agotado para: "
+                                + producto.getNombre()
+                );
             }
 
-            if (producto.getStock() < item.getCantidad()) {
-                throw new IllegalStateException("Stock insuficiente para: " + producto.getNombre());
+            if (
+                    producto.getStock()
+                            < item.getCantidad()
+            ) {
+
+                throw new IllegalStateException(
+                        "Stock insuficiente para: "
+                                + producto.getNombre()
+                );
             }
 
-            producto.setStock(producto.getStock() - item.getCantidad());
+            producto.setStock(
+                    producto.getStock()
+                            - item.getCantidad()
+            );
 
             if (producto.getStock() <= 0) {
                 producto.setEstaDisponible(false);
             }
 
-            BigDecimal sub = producto.getPrecio()
-                    .multiply(BigDecimal.valueOf(item.getCantidad()));
+            BigDecimal precioUnitario =
+                    producto.getPrecio()
+                            .setScale(
+                                    2,
+                                    RoundingMode.HALF_UP
+                            );
 
-            DetallePedido detalle = DetallePedido.builder()
-                    .pedido(pedido)
-                    .producto(producto)
-                    .nombreHistorico(producto.getNombre())
-                    .cantidad(item.getCantidad())
-                    .precioUnitario(producto.getPrecio())
-                    .subtotal(sub)
-                    .build();
+            BigDecimal sub =
+                    precioUnitario.multiply(
+                                    BigDecimal.valueOf(
+                                            item.getCantidad()
+                                    )
+                            )
+                            .setScale(
+                                    2,
+                                    RoundingMode.HALF_UP
+                            );
+
+            DetallePedido detalle =
+                    DetallePedido.builder()
+                            .pedido(pedido)
+                            .producto(producto)
+                            .nombreHistorico(
+                                    producto.getNombre()
+                            )
+                            .cantidad(
+                                    item.getCantidad()
+                            )
+                            .precioUnitario(
+                                    precioUnitario
+                            )
+                            .subtotal(sub)
+                            .build();
 
             pedido.getDetalles().add(detalle);
             subtotal = subtotal.add(sub);
         }
 
-        BigDecimal igv = PedidoDomainService.calcularIgv(subtotal);
+        subtotal = subtotal.setScale(
+                2,
+                RoundingMode.HALF_UP
+        );
+
+        BigDecimal igv = PedidoDomainService
+                .calcularIgv(subtotal)
+                .setScale(
+                        2,
+                        RoundingMode.HALF_UP
+                );
+
+        BigDecimal total = subtotal
+                .add(igv)
+                .setScale(
+                        2,
+                        RoundingMode.HALF_UP
+                );
 
         pedido.setSubtotal(subtotal);
         pedido.setImpuestoIgv(igv);
-        pedido.setTotal(subtotal.add(igv));
+        pedido.setTotal(total);
 
-        if (pedidoActivoOpt.isPresent()) {
-
-            int cantidadItems = pedido.getDetalles()
-                    .stream()
-                    .mapToInt(DetallePedido::getCantidad)
-                    .sum();
-
-            int tiempoExtra = Math.max(0, cantidadItems - 1) * 2;
-
-            int nuevoTiempo = restaurante.getTiempoPreparacionMin() + tiempoExtra;
-
-            nuevoTiempo = Math.min(nuevoTiempo, restaurante.getTiempoPreparacionMax());
-
-            pedido.setTiempoEstimadoMin(nuevoTiempo);
-            pedido.setHoraEstimadaRecojo(OffsetDateTime.now().plusMinutes(nuevoTiempo));
-        }
+        log.info(
+                "PEDIDO CALCULADO -> subtotal={}, igv={}, total={}",
+                subtotal,
+                igv,
+                total
+        );
 
         Pedido saved = pedidoRepository.save(pedido);
 
-        if (pedidoActivoOpt.isEmpty()) {
-            registrarHistorial(saved);
-        }
+        registrarHistorial(saved);
 
         return mapResponse(saved, true);
     }
