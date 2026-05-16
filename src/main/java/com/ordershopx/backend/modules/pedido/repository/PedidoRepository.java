@@ -42,6 +42,11 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
 
     Optional<Pedido> findByCodigoRecojo(String codigoRecojo);
 
+    Optional<Pedido> findByCodigoRecojoAndRestaurante_IdUsuario(
+            String codigoRecojo,
+            UUID idRestaurante
+    );
+
     boolean existsByCodigoRecojo(String codigoRecojo);
 
     boolean existsByCliente_IdUsuarioAndEstadoIn(UUID idCliente, List<EstadoPedido> estados);

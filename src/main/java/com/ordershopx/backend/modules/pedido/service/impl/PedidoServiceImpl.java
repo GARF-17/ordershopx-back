@@ -305,10 +305,21 @@ public class PedidoServiceImpl implements IPedidoService {
     @Override
     public List<PedidoResponseDTO> listarColaRestaurante() {
         Usuario usuario = getUsuarioAutenticado();
-        return pedidoRepository.findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
-                usuario.getUsuarioId(),
-                List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO)
-        ).stream().map(p -> mapResponse(p, false)).toList();
+
+        return pedidoRepository
+                .findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
+                        usuario.getUsuarioId(),
+                        List.of(
+                                EstadoPedido.EN_COLA,
+                                EstadoPedido.PREPARANDO,
+                                EstadoPedido.LISTO_PARA_RECOGER,
+                                EstadoPedido.COMPLETADO
+                        )
+                )
+                .stream()
+                .map(p -> mapResponse(p, false))
+                .toList();
+
     }
 
     // CAMBIAR ESTADO
@@ -327,6 +338,52 @@ public class PedidoServiceImpl implements IPedidoService {
         registrarHistorial(pedido);
 
         return mapResponse(pedido, true);
+    }
+
+    @Override
+    @Transactional
+    public PedidoResponseDTO validarCodigoRecojo(String codigo) {
+
+        Usuario usuario = getUsuarioAutenticado();
+
+        Pedido pedido = pedidoRepository
+                .findByCodigoRecojoAndRestaurante_IdUsuario(
+                        codigo,
+                        usuario.getUsuarioId()
+                )
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Código de recojo no encontrado"
+                        )
+                );
+
+        // VALIDAR ESTADO
+        if (
+                pedido.getEstado() != EstadoPedido.LISTO_PARA_RECOGER
+        ) {
+
+            throw new IllegalStateException(
+                    "El pedido aún no está listo para entregar"
+            );
+        }
+
+        // CAMBIAR ESTADO
+        pedido.setEstado(
+                EstadoPedido.COMPLETADO
+        );
+
+        pedido.setHoraRealRecojo(
+                OffsetDateTime.now()
+        );
+
+        registrarHistorial(pedido);
+
+        Pedido actualizado =
+                pedidoRepository.save(pedido);
+
+        return mapResponse(actualizado, true);
+
+
     }
 
     // UTILIDADES
