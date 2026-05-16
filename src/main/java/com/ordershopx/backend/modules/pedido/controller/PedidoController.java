@@ -95,4 +95,20 @@ public class PedidoController {
                 ApiResponse.success(response, "Estado actualizado correctamente")
         );
     }
+
+    @PostMapping("/validar-codigo/{codigo}")
+    public ResponseEntity<ApiResponse<PedidoResponseDTO>> validarCodigoRecojo(@PathVariable String codigo) {
+
+        log.info( "event=api_validar_codigo codigo={}", codigo);
+
+        PedidoResponseDTO response =
+                pedidoService.validarCodigoRecojo(
+                        codigo.toUpperCase()
+                );
+
+        return ResponseEntity.ok( ApiResponse.success( response,"Pedido entregado correctamente")
+        );
+
+    }
+
 }

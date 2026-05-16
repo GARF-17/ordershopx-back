@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -45,6 +46,7 @@ public class PagoServiceImpl implements IPagoService {
                         new ResourceNotFoundException("Pedido no encontrado")
                 );
 
+        // VALIDAR NÚMERO DE OPERACIÓN
         if (
                 request.getMetodoPago() != MetodoPago.EFECTIVO
                         && (
@@ -60,6 +62,7 @@ public class PagoServiceImpl implements IPagoService {
 
         TipoPago tipoPago = request.getTipoPago();
 
+        // VALIDAR DUPLICIDAD
         boolean yaExiste = pagoRepository
                 .existsByPedido_IdPedidoAndTipoPago(
                         pedido.getIdPedido(),
@@ -72,17 +75,23 @@ public class PagoServiceImpl implements IPagoService {
             );
         }
 
-        BigDecimal totalPedido = pedido.getTotal();
+        // TOTAL PEDIDO
+        BigDecimal totalPedido = pedido.getTotal()
+                .setScale(2, RoundingMode.HALF_UP);
 
+        // MONTO REQUEST
+        BigDecimal montoRequest = request.getMonto()
+                .setScale(2, RoundingMode.HALF_UP);
+
+        // ADELANTO LA MITAD
         BigDecimal montoMinimoAdelanto = totalPedido
-                .multiply(new BigDecimal("0.50"));
+                .multiply(new BigDecimal("0.50"))
+                .setScale(2, RoundingMode.HALF_UP);
 
         // VALIDAR ADELANTO
         if (tipoPago == TipoPago.ADELANTO) {
 
-            if (request.getMonto()
-                    .compareTo(montoMinimoAdelanto) < 0) {
-
+            if (montoRequest.compareTo(montoMinimoAdelanto) < 0) {
                 throw new IllegalStateException(
                         "El adelanto mínimo es del 50%"
                 );
@@ -97,10 +106,10 @@ public class PagoServiceImpl implements IPagoService {
         if (tipoPago == TipoPago.SALDO) {
 
             BigDecimal restante = totalPedido
-                    .subtract(montoMinimoAdelanto);
+                    .subtract(montoMinimoAdelanto)
+                    .setScale(2, RoundingMode.HALF_UP);
 
-            if (request.getMonto()
-                    .compareTo(restante) != 0) {
+            if (montoRequest.compareTo(restante) != 0) {
 
                 throw new IllegalStateException(
                         "El saldo restante es incorrecto"
@@ -116,7 +125,7 @@ public class PagoServiceImpl implements IPagoService {
                 .pedido(pedido)
                 .tipoPago(tipoPago)
                 .metodoPago(request.getMetodoPago())
-                .monto(request.getMonto())
+                .monto(montoRequest)
                 .moneda(request.getMoneda())
                 .numeroOperacion(request.getNumeroOperacion())
                 .esConfirmado(true)
