@@ -43,31 +43,51 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
+                        // =========================
+                        // WEBSOCKET
+                        // =========================
+                        .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("/ws").permitAll()
+
+                        // =========================
                         // PUBLICOS
+                        // =========================
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/usuarios/**").permitAll()
 
+                        // =========================
                         // ADMIN
+                        // =========================
                         .requestMatchers("/api/v1/admin/**")
                         .hasRole("ADMINISTRADOR")
 
+                        // =========================
                         // RESTAURANTES GET
+                        // =========================
                         .requestMatchers(HttpMethod.GET, "/api/v1/restaurantes/**")
                         .hasAnyRole("COMENSAL", "RESTAURANTE")
 
+                        // =========================
                         // PRODUCTOS GET
+                        // =========================
                         .requestMatchers(HttpMethod.GET, "/api/v1/productos/**")
                         .hasAnyRole("COMENSAL", "RESTAURANTE")
 
+                        // =========================
                         // RESTAURANTE CRUD
+                        // =========================
                         .requestMatchers("/api/v1/restaurantes/**")
                         .hasRole("RESTAURANTE")
 
+                        // =========================
                         // PRODUCTOS CRUD
+                        // =========================
                         .requestMatchers("/api/v1/productos/**")
                         .hasRole("RESTAURANTE")
 
+                        // =========================
                         // CLIENTES
+                        // =========================
                         .requestMatchers("/api/v1/clientes/**")
                         .hasRole("COMENSAL")
 
