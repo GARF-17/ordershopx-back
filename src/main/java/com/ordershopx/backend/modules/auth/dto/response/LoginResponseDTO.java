@@ -11,4 +11,5 @@ public class LoginResponseDTO {
     private String token;
     private String correoElectronico;
     private String rol;
+    private java.util.UUID idRestaurante; // ← nuevo campo
 }

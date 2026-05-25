@@ -43,6 +43,11 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
+
+                        // WEBSOCKET
+                        .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("/ws").permitAll()
+
                         // PUBLICOS
                         // PERMITIR PETICIONES
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()

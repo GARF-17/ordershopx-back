@@ -55,10 +55,17 @@ public class AuthServiceImpl implements IAuthService {
 
         log.info("event=auth_login_success usuarioId={}", usuario.getUsuarioId());
 
+        // Obtener idRestaurante si el rol es RESTAURANTE
+        java.util.UUID idRestaurante = null;
+        if (usuario.getRol() == TipoRol.RESTAURANTE) {
+            idRestaurante = usuario.getUsuarioId(); // el idRestaurante ES el idUsuario
+        }
+
         return LoginResponseDTO.builder()
                 .token(jwtService.generateToken(usuario))
                 .correoElectronico(usuario.getCorreoElectronico())
                 .rol(usuario.getRol().name())
+                .idRestaurante(idRestaurante) // ← nuevo campo
                 .build();
     }
 
