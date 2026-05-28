@@ -3,6 +3,7 @@ package com.ordershopx.backend.modules.notificacion.repository;
 import com.ordershopx.backend.modules.notificacion.entity.Notificacion;
 import com.ordershopx.backend.shared.enums.TipoRol;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -17,9 +18,9 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, UUID
     );
 
     // TODAS LAS NOTIFICACIONES DEL USUARIO POR ROL
+    @EntityGraph(attributePaths = {"pedido", "pedido.cliente"})
     List<Notificacion> findByUsuario_UsuarioIdAndRolDestinatarioOrderByFechaCreacionDesc(
-            UUID usuarioId,
-            TipoRol rolDestinatario
+            UUID usuarioId, TipoRol rolDestinatario
     );
 
     // NO LEÍDAS

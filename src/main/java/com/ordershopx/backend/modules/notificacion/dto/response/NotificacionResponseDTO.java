@@ -30,4 +30,7 @@ public class NotificacionResponseDTO {
     private Boolean leida;
 
     private OffsetDateTime fechaCreacion;
+
+    // NOMBRE DEL CLIENTE QUE REALIZÓ EL PEDIDO
+    private String nombreCliente;
 }
