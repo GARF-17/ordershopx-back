@@ -34,7 +34,7 @@ public class CategoriaMenuServiceImpl implements ICategoriaMenuService {
     private final RestauranteRepository restauranteRepository;
     private final IUsuarioService usuarioService;
 
-    // 🔐 Obtener usuario autenticado
+    // Obtener usuario autenticado
     private Usuario getUsuarioAutenticado() {
         String correo = SecurityContextHolder.getContext()
                 .getAuthentication()
@@ -43,15 +43,13 @@ public class CategoriaMenuServiceImpl implements ICategoriaMenuService {
         return usuarioService.obtenerPorCorreo(correo);
     }
 
-    // 🍽️ Obtener restaurante del usuario
+    // Obtener restaurante del usuario
     private Restaurante getRestaurante(Usuario usuario) {
         return restauranteRepository.findByUsuario(usuario)
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
     }
 
-    // ================================
     // CREAR
-    // ================================
     @Override
     @Transactional
     public CategoriaMenuResponseDTO crearCategoria(CategoriaMenuRequestDTO request) {
@@ -80,9 +78,7 @@ public class CategoriaMenuServiceImpl implements ICategoriaMenuService {
         return categoriaMapper.toResponse(categoria);
     }
 
-    // ================================
     // LISTAR
-    // ================================
     @Override
     @Transactional(readOnly = true)
     public List<CategoriaMenuResponseDTO> listarMisCategorias() {
@@ -101,7 +97,6 @@ public class CategoriaMenuServiceImpl implements ICategoriaMenuService {
                 .toList();
     }
 
-    // ================================
     // ACTUALIZAR
     @Override
     @Transactional
