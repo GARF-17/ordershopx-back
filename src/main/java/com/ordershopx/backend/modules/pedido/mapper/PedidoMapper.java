@@ -39,7 +39,7 @@ public interface PedidoMapper {
     @Mapping(target = "horaEstimadaRecojo", ignore = true)
     @Mapping(target = "horaRealRecojo", ignore = true)
     @Mapping(target = "subtotal", ignore = true)
-    @Mapping(target = "impuestoIgv", ignore = true)
+    //@Mapping(target = "impuestoIgv", ignore = true)
     @Mapping(target = "total", ignore = true)
     @Mapping(target = "cliente", ignore = true)
     @Mapping(target = "restaurante", ignore = true)

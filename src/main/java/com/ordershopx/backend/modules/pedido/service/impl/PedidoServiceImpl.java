@@ -116,7 +116,7 @@ public class PedidoServiceImpl implements IPedidoService {
         pedido.setNotasCliente(request.getNotasCliente());
 
         pedido.setSubtotal(BigDecimal.ZERO);
-        pedido.setImpuestoIgv(BigDecimal.ZERO);
+        //pedido.setImpuestoIgv(BigDecimal.ZERO);
         pedido.setTotal(BigDecimal.ZERO);
 
         BigDecimal subtotal = BigDecimal.ZERO;
@@ -163,15 +163,18 @@ public class PedidoServiceImpl implements IPedidoService {
 
         subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal igv = PedidoDomainService.calcularIgv(subtotal)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        BigDecimal total = subtotal.add(igv)
-                .setScale(2, RoundingMode.HALF_UP);
+//        BigDecimal igv = PedidoDomainService.calcularIgv(subtotal)
+//                .setScale(2, RoundingMode.HALF_UP);
+//
+//        BigDecimal total = subtotal.add(igv)
+//                .setScale(2, RoundingMode.HALF_UP);
+//
+//        pedido.setSubtotal(subtotal);
+//        pedido.setImpuestoIgv(igv);
+//        pedido.setTotal(total);
 
         pedido.setSubtotal(subtotal);
-        pedido.setImpuestoIgv(igv);
-        pedido.setTotal(total);
+        pedido.setTotal(subtotal);
 
         Pedido saved = pedidoRepository.save(pedido);
 
