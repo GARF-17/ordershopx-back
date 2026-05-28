@@ -38,7 +38,7 @@ public class PedidoResponseDTO {
 
     private BigDecimal subtotal;
 
-    private BigDecimal impuestoIgv;
+    // private BigDecimal impuestoIgv;
 
     private BigDecimal total;
 

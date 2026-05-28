@@ -19,10 +19,10 @@ public class PedidoDomainService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    public static BigDecimal calcularIgv(BigDecimal subtotal) {
-
-        return subtotal
-                .multiply(new BigDecimal("0.18"))
-                .setScale(2, RoundingMode.HALF_UP);
-    }
+//    public static BigDecimal calcularIgv(BigDecimal subtotal) {
+//
+//        return subtotal
+//                .multiply(new BigDecimal("0.18"))
+//                .setScale(2, RoundingMode.HALF_UP);
+//    }
 }

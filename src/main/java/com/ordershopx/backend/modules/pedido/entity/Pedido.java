@@ -64,9 +64,6 @@ public class Pedido extends BaseEntity {
     @Column(name = "subtotal", nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;
 
-    @Column(name = "impuesto_igv", nullable = false, precision = 10, scale = 2)
-    private BigDecimal impuestoIgv;
-
     @Column(name = "total", nullable = false, precision = 10, scale = 2)
     private BigDecimal total;
 
