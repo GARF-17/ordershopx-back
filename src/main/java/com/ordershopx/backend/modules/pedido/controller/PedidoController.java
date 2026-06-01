@@ -54,7 +54,7 @@ public class PedidoController {
         );
     }
 
-    // LISTAR MIS PEDIDOS
+    // LISTAR MIS PEDIDOS (CLIENTE)
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<List<PedidoResponseDTO>>> listarMisPedidos() {
 
@@ -64,6 +64,19 @@ public class PedidoController {
 
         return ResponseEntity.ok(
                 ApiResponse.success(response, "Pedidos obtenidos correctamente")
+        );
+    }
+
+    // 🔥 NUEVO ENDPOINT: LISTAR TODOS LOS PEDIDOS DEL RESTAURANTE (Para las pestañas del Front)
+    @GetMapping("/restaurante")
+    public ResponseEntity<ApiResponse<List<PedidoResponseDTO>>> listarPedidosRestaurante() {
+
+        log.info("event=api_listar_pedidos_restaurante");
+
+        List<PedidoResponseDTO> response = pedidoService.listarPedidosRestaurante();
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response, "Pedidos del restaurante obtenidos correctamente")
         );
     }
 
@@ -96,6 +109,7 @@ public class PedidoController {
         );
     }
 
+    // VALIDAR CÓDIGO QR
     @PostMapping("/validar-codigo/{codigo}")
     public ResponseEntity<ApiResponse<PedidoResponseDTO>> validarCodigoRecojo(@PathVariable String codigo) {
 
@@ -110,5 +124,4 @@ public class PedidoController {
         );
 
     }
-
 }

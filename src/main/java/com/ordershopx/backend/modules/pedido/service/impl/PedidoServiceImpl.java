@@ -28,7 +28,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -52,7 +51,9 @@ public class PedidoServiceImpl implements IPedidoService {
         return usuarioService.obtenerPorCorreo(correo);
     }
 
+    // =========================
     // CREAR PEDIDO
+    // =========================
     @Override
     @Transactional
     public PedidoResponseDTO crearPedido(PedidoRequestDTO request) {
@@ -89,7 +90,7 @@ public class PedidoServiceImpl implements IPedidoService {
         );
 
         if (pedidosEnSlot >= restaurante.getCapacidadCocina()) {
-            throw new IllegalStateException("Slot de horario saturado");
+            throw new IllegalStateException("Slot saturado");
         }
 
         int orden = PedidoDomainService.calcularOrden(pedidosEnSlot);
@@ -102,7 +103,6 @@ public class PedidoServiceImpl implements IPedidoService {
         OffsetDateTime horaEstimada = OffsetDateTime.now().plusMinutes(tiempo);
 
         Pedido pedido = new Pedido();
-
         pedido.setIdPedido(UUID.randomUUID());
         pedido.setCliente(cliente);
         pedido.setRestaurante(restaurante);
@@ -115,10 +115,6 @@ public class PedidoServiceImpl implements IPedidoService {
         pedido.setHorarioRecojoSeleccionado(inicio);
         pedido.setNotasCliente(request.getNotasCliente());
 
-        pedido.setSubtotal(BigDecimal.ZERO);
-        //pedido.setImpuestoIgv(BigDecimal.ZERO);
-        pedido.setTotal(BigDecimal.ZERO);
-
         BigDecimal subtotal = BigDecimal.ZERO;
 
         for (PedidoItemRequestDTO item : request.getItems()) {
@@ -126,52 +122,19 @@ public class PedidoServiceImpl implements IPedidoService {
             Producto producto = productoRepository.findById(item.getIdProducto())
                     .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
 
-            if (!Boolean.TRUE.equals(producto.getEstaDisponible())
-                    || producto.getStock() == null
-                    || producto.getStock() <= 0) {
-                throw new IllegalStateException("Stock agotado para: " + producto.getNombre());
-            }
-
-            if (producto.getStock() < item.getCantidad()) {
-                throw new IllegalStateException("Stock insuficiente para: " + producto.getNombre());
-            }
-
-            producto.setStock(producto.getStock() - item.getCantidad());
-
-            if (producto.getStock() <= 0) {
-                producto.setEstaDisponible(false);
-            }
-
-            BigDecimal precioUnitario = producto.getPrecio().setScale(2, RoundingMode.HALF_UP);
-
-            BigDecimal sub = precioUnitario
-                    .multiply(BigDecimal.valueOf(item.getCantidad()))
-                    .setScale(2, RoundingMode.HALF_UP);
-
-            DetallePedido detalle = DetallePedido.builder()
-                    .pedido(pedido)
-                    .producto(producto)
-                    .nombreHistorico(producto.getNombre())
-                    .cantidad(item.getCantidad())
-                    .precioUnitario(precioUnitario)
-                    .subtotal(sub)
-                    .build();
-
-            pedido.getDetalles().add(detalle);
+            BigDecimal precio = producto.getPrecio();
+            BigDecimal sub = precio.multiply(BigDecimal.valueOf(item.getCantidad()));
             subtotal = subtotal.add(sub);
+
+            DetallePedido detalle = new DetallePedido();
+            detalle.setProducto(producto);
+            detalle.setNombreHistorico(producto.getNombre());
+            detalle.setCantidad(item.getCantidad());
+            detalle.setPrecioUnitario(precio);
+            detalle.setSubtotal(sub);
+
+            pedido.addDetalle(detalle);
         }
-
-        subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
-
-//        BigDecimal igv = PedidoDomainService.calcularIgv(subtotal)
-//                .setScale(2, RoundingMode.HALF_UP);
-//
-//        BigDecimal total = subtotal.add(igv)
-//                .setScale(2, RoundingMode.HALF_UP);
-//
-//        pedido.setSubtotal(subtotal);
-//        pedido.setImpuestoIgv(igv);
-//        pedido.setTotal(total);
 
         pedido.setSubtotal(subtotal);
         pedido.setTotal(subtotal);
@@ -180,14 +143,15 @@ public class PedidoServiceImpl implements IPedidoService {
 
         registrarHistorial(saved);
 
-        PedidoResponseDTO response = mapResponse(saved, true);
+        // Envía el evento al WebSocket para que React Native dispare la notificación local
+        pedidoWebSocketService.notificarNuevoPedido(mapResponse(saved, true));
 
-        pedidoWebSocketService.notificarNuevoPedido(response);
-
-        return response;
+        return mapResponse(saved, true);
     }
 
+    // =========================
     // CAMBIAR ESTADO
+    // =========================
     @Override
     @Transactional
     public PedidoResponseDTO cambiarEstado(CambiarEstadoPedidoDTO request) {
@@ -195,24 +159,21 @@ public class PedidoServiceImpl implements IPedidoService {
         Pedido pedido = pedidoRepository.findById(request.getIdPedido())
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
 
-        if (!esTransicionValida(pedido.getEstado(), request.getEstado())) {
-            throw new IllegalStateException("Transición inválida");
-        }
-
         pedido.setEstado(request.getEstado());
-
-        registrarHistorial(pedido);
 
         Pedido saved = pedidoRepository.save(pedido);
 
-        PedidoResponseDTO response = mapResponse(saved, true);
+        registrarHistorial(saved);
 
-        pedidoWebSocketService.notificarCambioEstado(response);
+        // Envía el evento al WebSocket
+        pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
 
-        return response;
+        return mapResponse(saved, true);
     }
 
-    // VALIDAR CÓDIGO
+    // =========================
+    // VALIDAR CÓDIGO (¡CON CORRECCIÓN DE HORA!)
+    // =========================
     @Override
     @Transactional
     public PedidoResponseDTO validarCodigoRecojo(String codigo) {
@@ -221,73 +182,85 @@ public class PedidoServiceImpl implements IPedidoService {
 
         Pedido pedido = pedidoRepository
                 .findByCodigoRecojoAndRestaurante_IdUsuario(codigo, usuario.getUsuarioId())
-                .orElseThrow(() -> new ResourceNotFoundException("Código de recojo no encontrado"));
-
-        if (pedido.getEstado() != EstadoPedido.LISTO_PARA_RECOGER) {
-            throw new IllegalStateException("El pedido aún no está listo para entregar");
-        }
+                .orElseThrow(() -> new ResourceNotFoundException("Código inválido"));
 
         pedido.setEstado(EstadoPedido.COMPLETADO);
+
+        // Guardamos la hora exacta en la que se recogió el pedido para que la Native Query de la base de datos lo filtre correctamente como "completado hoy".
         pedido.setHoraRealRecojo(OffsetDateTime.now());
 
-        registrarHistorial(pedido);
+        Pedido saved = pedidoRepository.save(pedido);
 
-        Pedido actualizado = pedidoRepository.save(pedido);
+        registrarHistorial(saved);
 
-        PedidoResponseDTO response = mapResponse(actualizado, true);
+        // Envía el evento final al WebSocket
+        pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
 
-        pedidoWebSocketService.notificarCambioEstado(response);
-
-        return response;
+        return mapResponse(saved, true);
     }
 
-    // RESTO DE MÉTODOS
+    // =========================
+    // LISTAR TODOS (RESTAURANTE) - NUEVO MÉTODO
+    // =========================
     @Override
-    public PedidoResponseDTO obtenerPedido(UUID idPedido, boolean incluirHistorial) {
-        Pedido pedido = pedidoRepository.findById(idPedido)
-                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
-        return mapResponse(pedido, incluirHistorial);
+    @Transactional(readOnly = true)
+    public List<PedidoResponseDTO> listarPedidosRestaurante() {
+        Usuario usuario = getUsuarioAutenticado();
+
+        // Invocamos la Native Query de PostgreSQL que filtra completados solo de hoy
+        return pedidoRepository.findPedidosActualesByRestauranteId(usuario.getUsuarioId())
+                .stream()
+                .map(p -> mapResponse(p, false))
+                .toList();
     }
 
+    // =========================
+    // LISTAR CLIENTE
+    // =========================
     @Override
     public List<PedidoResponseDTO> listarPedidosCliente() {
+
         Usuario usuario = getUsuarioAutenticado();
+
         return pedidoRepository.findByCliente_IdUsuarioOrderByFechaCreacionDesc(usuario.getUsuarioId())
-                .stream().map(p -> mapResponse(p, false)).toList();
+                .stream()
+                .map(p -> mapResponse(p, false))
+                .toList();
     }
 
+    // =========================
+    // COLA RESTAURANTE
+    // =========================
     @Override
     public List<PedidoResponseDTO> listarColaRestaurante() {
+
         Usuario usuario = getUsuarioAutenticado();
 
-        return pedidoRepository.findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
+        return pedidoRepository
+                .findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
                         usuario.getUsuarioId(),
-                        List.of(
-                                EstadoPedido.EN_COLA,
-                                EstadoPedido.PREPARANDO,
-                                EstadoPedido.LISTO_PARA_RECOGER,
-                                EstadoPedido.COMPLETADO
-                        )
+                        List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO)
                 )
                 .stream()
                 .map(p -> mapResponse(p, false))
                 .toList();
     }
 
-    private boolean esTransicionValida(EstadoPedido actual, EstadoPedido nuevo) {
+    // =========================
+    // OBTENER PEDIDO
+    // =========================
+    @Override
+    public PedidoResponseDTO obtenerPedido(UUID idPedido, boolean incluirHistorial) {
 
-        Map<EstadoPedido, Set<EstadoPedido>> reglas = Map.of(
-                EstadoPedido.PENDIENTE, Set.of(EstadoPedido.EN_COLA, EstadoPedido.CANCELADO),
-                EstadoPedido.EN_COLA, Set.of(EstadoPedido.PREPARANDO, EstadoPedido.CANCELADO),
-                EstadoPedido.PREPARANDO, Set.of(EstadoPedido.LISTO_PARA_RECOGER),
-                EstadoPedido.LISTO_PARA_RECOGER, Set.of(EstadoPedido.COMPLETADO),
-                EstadoPedido.COMPLETADO, Set.of(),
-                EstadoPedido.CANCELADO, Set.of()
-        );
+        Pedido pedido = pedidoRepository.findById(idPedido)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
 
-        return reglas.getOrDefault(actual, Set.of()).contains(nuevo);
+        return mapResponse(pedido, incluirHistorial);
     }
 
+    // =========================
+    // HELPERS
+    // =========================
     private void registrarHistorial(Pedido pedido) {
         historialRepository.save(
                 HistorialPedido.builder()
@@ -301,8 +274,8 @@ public class PedidoServiceImpl implements IPedidoService {
     private String generarCodigo() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         SecureRandom random = new SecureRandom();
-        String codigo;
 
+        String codigo;
         do {
             StringBuilder sb = new StringBuilder(6);
             for (int i = 0; i < 6; i++) {
@@ -317,6 +290,7 @@ public class PedidoServiceImpl implements IPedidoService {
     private PedidoResponseDTO mapResponse(Pedido pedido, boolean incluirHistorial) {
 
         PedidoResponseDTO dto = pedidoMapper.toResponse(pedido);
+
         dto.setItems(pedidoMapper.toDetalleList(pedido.getDetalles()));
 
         if (incluirHistorial) {

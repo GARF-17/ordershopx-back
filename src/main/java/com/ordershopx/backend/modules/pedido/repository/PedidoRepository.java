@@ -38,8 +38,28 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
 
     Optional<Pedido> findByIdPedidoAndRestaurante_IdUsuario(UUID idPedido, UUID idRestaurante);
 
-    // CÓDIGOS DE RECOJO
+    /**
+     * Busca todos os pedidos ativos do restaurante e inclui as ordens COMPLETADAS apenas do dia atual.
+     * O uso do cast '::estado_pedido' previne erros de incompatibilidade com o tipo ENUM nativo do PostgreSQL.
+     */
+    @Query(value = """
+        SELECT * FROM pedidos p 
+        WHERE p.id_restaurante = :idRestaurante 
+        AND (
+            p.estado IN ('PENDIENTE'::estado_pedido, 'EN_COLA'::estado_pedido, 'PREPARANDO'::estado_pedido, 'LISTO_PARA_RECOGER'::estado_pedido)
+            OR (p.estado = 'COMPLETADO'::estado_pedido AND p.hora_real_recojo >= CURRENT_DATE)
+        )
+        ORDER BY CASE p.estado
+            WHEN 'EN_COLA'::estado_pedido THEN 1
+            WHEN 'PENDIENTE'::estado_pedido THEN 1
+            WHEN 'PREPARANDO'::estado_pedido THEN 2
+            WHEN 'LISTO_PARA_RECOGER'::estado_pedido THEN 3
+            WHEN 'COMPLETADO'::estado_pedido THEN 4
+            ELSE 5 END
+    """, nativeQuery = true)
+    List<Pedido> findPedidosActualesByRestauranteId(@Param("idRestaurante") UUID idRestaurante);
 
+    // CÓDIGOS DE RECOJO
     Optional<Pedido> findByCodigoRecojo(String codigoRecojo);
 
     Optional<Pedido> findByCodigoRecojoAndRestaurante_IdUsuario(
@@ -93,6 +113,4 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
         WHERE r.idUsuario = :idRestaurante
     """)
     UUID lockRestaurante(@Param("idRestaurante") UUID idRestaurante);
-
-
 }

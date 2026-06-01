@@ -16,7 +16,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-
 public class Usuario extends BaseEntity {
 
     @Id
@@ -47,4 +46,7 @@ public class Usuario extends BaseEntity {
     @Column(name = "esta_activo")
     private Boolean estaActivo = true;
 
+
+    @Column(name = "fcm_token", length = 500)
+    private String fcmToken;
 }

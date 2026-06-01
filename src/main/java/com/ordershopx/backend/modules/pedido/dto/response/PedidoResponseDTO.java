@@ -18,6 +18,8 @@ public class PedidoResponseDTO {
 
     private UUID idPedido;
 
+    private UUID idCliente;
+
     private String codigoRecojo;
 
     private EstadoPedido estado;
@@ -38,15 +40,11 @@ public class PedidoResponseDTO {
 
     private BigDecimal subtotal;
 
-    // private BigDecimal impuestoIgv;
-
     private BigDecimal total;
 
     private String notasCliente;
 
-    // items del pedido
     private List<PedidoDetalleResponseDTO> items;
 
-    // historial (OPCIONAL)
     private List<HistorialPedidoDTO> historial;
 }

@@ -17,6 +17,9 @@ public interface IPedidoService {
 
     List<PedidoResponseDTO> listarColaRestaurante();
 
+
+    List<PedidoResponseDTO> listarPedidosRestaurante();
+
     PedidoResponseDTO cambiarEstado(CambiarEstadoPedidoDTO request);
 
     PedidoResponseDTO validarCodigoRecojo(String codigo);

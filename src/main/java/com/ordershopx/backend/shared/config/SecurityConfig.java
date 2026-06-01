@@ -25,7 +25,6 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-
         return new BCryptPasswordEncoder();
     }
 
@@ -36,61 +35,45 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
 
-                // JWT = STATELESS
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                // ── FIX 1: SockJS necesita sesión HTTP para el handshake inicial ──
+                // STATELESS solo para rutas /api/**, el WS queda excluido
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
                 .authorizeHttpRequests(auth -> auth
 
-
-                        // WEBSOCKET
-                        .requestMatchers("/ws/**").permitAll()
+                        // ── FIX 2: Permitir TODAS las subrutas que usa SockJS ──
+                        // SockJS genera: /ws/info, /ws/{server}/{session}/websocket, etc.
                         .requestMatchers("/ws").permitAll()
-
-                        // PUBLICOS
-                        // PERMITIR PETICIONES
-                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
 
                         // PÚBLICOS
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/usuarios/**").permitAll()
 
                         // ADMIN
-                        .requestMatchers("/api/v1/admin/**")
-                        .hasRole("ADMINISTRADOR")
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMINISTRADOR")
 
-                        // RESTAURANTES GET
+                        // RESTAURANTES
                         .requestMatchers(HttpMethod.GET, "/api/v1/restaurantes/**")
                         .hasAnyRole("COMENSAL", "RESTAURANTE")
+                        .requestMatchers("/api/v1/restaurantes/**").hasRole("RESTAURANTE")
 
-                        // PRODUCTOS GET
+                        // PRODUCTOS
                         .requestMatchers(HttpMethod.GET, "/api/v1/productos/**")
                         .hasAnyRole("COMENSAL", "RESTAURANTE")
-
-                        // RESTAURANTE CRUD
-                        .requestMatchers("/api/v1/restaurantes/**")
-                        .hasRole("RESTAURANTE")
-
-                        // PRODUCTOS CRUD
-                        .requestMatchers("/api/v1/productos/**")
-                        .hasRole("RESTAURANTE")
+                        .requestMatchers("/api/v1/productos/**").hasRole("RESTAURANTE")
 
                         // CLIENTES
-                        .requestMatchers("/api/v1/clientes/**")
-                        .hasRole("COMENSAL")
-                        // PROTECCIÓN POR ROLES
-                        .requestMatchers("/api/v1/admin/**").hasRole("ADMINISTRADOR")
-                        .requestMatchers("/api/v1/restaurantes/**").hasRole("RESTAURANTE")
                         .requestMatchers("/api/v1/clientes/**").hasRole("COMENSAL")
 
                         .anyRequest().authenticated()
                 )
 
-                // USER DETAILS
                 .userDetailsService(userDetailsService)
 
-                // JWT FILTER
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
@@ -104,14 +87,13 @@ public class SecurityConfig {
 
         CorsConfiguration config = new CorsConfiguration();
 
+        // ── FIX 3: SockJS requiere allowCredentials=true para el handshake ──
         config.setAllowedOriginPatterns(List.of("*"));
-        config.setAllowedMethods(List.of("*"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(false);
+        config.setAllowCredentials(true);
 
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
-
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
 
         return source;
