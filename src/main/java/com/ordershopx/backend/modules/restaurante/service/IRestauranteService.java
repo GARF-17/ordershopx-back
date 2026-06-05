@@ -15,6 +15,9 @@ public interface IRestauranteService {
 
     List<RestauranteResponseDTO> listarRestaurantes();
 
+    // 🔥 NUEVA FIRMA: Para la búsqueda de locales en el mapa
+    List<RestauranteResponseDTO> buscarRestaurantesCercanos(Double latitud, Double longitud, Double radioKm);
+
     List<HorarioDisponibleDTO> listarHorariosDisponibles(UUID idRestaurante);
 
     RestauranteResponseDTO actualizarRestaurante(RestauranteRequestDTO request);

@@ -89,6 +89,9 @@ public class ProductoServiceImpl implements IProductoService {
         Producto producto = productoMapper.toEntity(request);
         producto.setCategoria(categoria);
 
+        // 🔥 EL ARREGLO ESTÁ AQUÍ: Forzamos a que el producto nazca disponible para los clientes
+        producto.setEstaDisponible(true);
+
         productoRepository.save(producto);
 
         log.info("event=crear_producto_success productoId={}", producto.getIdProducto());

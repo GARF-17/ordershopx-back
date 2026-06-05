@@ -38,7 +38,24 @@ public class RestauranteController {
         );
     }
 
-    // OBTENER MI RESTAURANTE
+    @GetMapping("/cercanos")
+    public ResponseEntity<ApiResponse<List<RestauranteResponseDTO>>> buscarRestaurantesCercanos(
+            @RequestParam("lat") Double lat,
+            @RequestParam("lng") Double lng,
+            // 🔥 AQUÍ ESTÁ EL CAMBIO A 1.5 KILÓMETROS
+            @RequestParam(value = "radio", defaultValue = "1.5") Double radio
+    ) {
+
+        log.info("event=api_buscar_restaurantes_cercanos lat={} lng={} radio={}", lat, lng, radio);
+
+        List<RestauranteResponseDTO> response =
+                restauranteService.buscarRestaurantesCercanos(lat, lng, radio);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response, "Restaurantes cercanos obtenidos correctamente")
+        );
+    }
+
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<RestauranteResponseDTO>> obtenerMiRestaurante() {
 
@@ -96,7 +113,7 @@ public class RestauranteController {
         );
     }
 
-    // HORARIOS DISPONIBLES
+
     @GetMapping("/{id}/horarios")
     public ResponseEntity<List<HorarioDisponibleDTO>>
     listarHorariosDisponibles(

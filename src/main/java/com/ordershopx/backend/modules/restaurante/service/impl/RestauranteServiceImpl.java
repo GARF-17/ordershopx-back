@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -64,36 +65,44 @@ public class RestauranteServiceImpl implements IRestauranteService {
 
         List<HorarioDisponibleDTO> horarios = new ArrayList<>();
 
-        OffsetDateTime ahora = OffsetDateTime.now()
-                .withSecond(0)
-                .withNano(0)
-                .plusMinutes(tiempoMin);
 
-        OffsetDateTime inicio = ahora
-                .withMinute((ahora.getMinute() / 10) * 10);
+        ZoneOffset zoneOffset = ZoneOffset.ofHours(-5);
+
+        OffsetDateTime ahoraPeru = OffsetDateTime.now(zoneOffset)
+                .withSecond(0)
+                .withNano(0);
+
+
+        OffsetDateTime primerBloqueDisponible = ahoraPeru.plusMinutes(tiempoMin);
+
+
+        int minutosSobrantes = primerBloqueDisponible.getMinute() % 10;
+        if (minutosSobrantes > 0) {
+            primerBloqueDisponible = primerBloqueDisponible.plusMinutes(10 - minutosSobrantes);
+        }
+
 
         for (int i = 0; i < 12; i++) {
 
-            OffsetDateTime horario = inicio.plusMinutes(i * 10L)
-                    .withSecond(0)
-                    .withNano(0);
+            OffsetDateTime inicioSlot = primerBloqueDisponible.plusMinutes(i * 10L);
+            OffsetDateTime finSlot = inicioSlot.plusMinutes(10);
 
-            OffsetDateTime inicioSlot = horario;
-            OffsetDateTime finSlot = horario.plusMinutes(10);
-
-            long pedidos = pedidoRepository.countByHorarioRango(
+            // Contamos los pedidos que ya existen en ese bloque de 10 minutos
+            long pedidosEnCocina = pedidoRepository.countByHorarioRango(
                     idRestaurante,
                     List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO),
                     inicioSlot,
                     finSlot
             );
 
-            boolean disponible = pedidos < capacidad;
+            // Verificamos si aún hay espacio
+            boolean disponible = pedidosEnCocina < capacidad;
+            int cuposRestantes = Math.max(0, capacidad - (int) pedidosEnCocina);
 
             horarios.add(
                     HorarioDisponibleDTO.builder()
-                            .hora(horario)
-                            .cuposDisponibles(Math.max(0, capacidad - (int) pedidos))
+                            .hora(inicioSlot)
+                            .cuposDisponibles(cuposRestantes)
                             .disponible(disponible)
                             .build()
             );
@@ -119,6 +128,18 @@ public class RestauranteServiceImpl implements IRestauranteService {
     public List<RestauranteResponseDTO> listarRestaurantes() {
         return restauranteRepository.findAll()
                 .stream()
+                .map(restauranteMapper::toResponse)
+                .toList();
+    }
+
+    // BUSCAR RESTAURANTES CERCANOS (GPS MAPA)
+    @Override
+    @Transactional(readOnly = true)
+    public List<RestauranteResponseDTO> buscarRestaurantesCercanos(Double latitud, Double longitud, Double radioKm) {
+
+        List<Restaurante> cercanos = restauranteRepository.findRestaurantesCercanos(latitud, longitud, radioKm);
+
+        return cercanos.stream()
                 .map(restauranteMapper::toResponse)
                 .toList();
     }
