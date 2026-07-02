@@ -9,42 +9,11 @@ import java.util.UUID;
 
 public interface ProductoRepository extends JpaRepository<Producto, UUID> {
 
-    // LISTAR PRODUCTOS
-    List<Producto> findByCategoria_Restaurante_IdUsuarioAndEliminadoEnIsNullOrderByNombreAsc(
-            UUID idRestaurante
-    );
-
-    // LISTAR PRODUCTOS POR CATEGORÍA
-    List<Producto> findByCategoria_IdCategoriaAndEliminadoEnIsNullOrderByNombreAsc(
-            UUID idCategoria
-    );
-
-    // LISTAR PRODUCTOS DISPONIBLES
-    List<Producto> findByCategoria_Restaurante_IdUsuarioAndEstaDisponibleTrueAndEliminadoEnIsNullOrderByNombreAsc(
-            UUID idRestaurante
-    );
-
-    // LISTAR PRODUCTOS CON STOCK
-    List<Producto> findByCategoria_Restaurante_IdUsuarioAndStockGreaterThanAndEliminadoEnIsNullOrderByNombreAsc(
-            UUID idRestaurante,
-            Integer stock
-    );
-
-    // OBTENER PRODUCTO (SEGURIDAD)
-    Optional<Producto> findByIdProductoAndCategoria_Restaurante_IdUsuarioAndEliminadoEnIsNull(
-            UUID idProducto,
-            UUID idRestaurante
-    );
-
-    // VALIDAR DUPLICADO EN CATEGORÍA
-    boolean existsByCategoria_IdCategoriaAndNombreIgnoreCaseAndEliminadoEnIsNull(
-            UUID idCategoria,
-            String nombre
-    );
-
-    // CONTAR PRODUCTOS ACTIVOS DEL RESTAURANTE
-    long countByCategoria_Restaurante_IdUsuarioAndEliminadoEnIsNull(
-            UUID idRestaurante
-    );
-
+    List<Producto> findByCategoria_Restaurante_IdUsuarioAndEliminadoEnIsNullOrderByNombreAsc(UUID idRestaurante);
+    List<Producto> findByCategoria_IdCategoriaAndEliminadoEnIsNullOrderByNombreAsc(UUID idCategoria);
+    List<Producto> findByCategoria_Restaurante_IdUsuarioAndEstaDisponibleTrueAndEliminadoEnIsNullOrderByNombreAsc(UUID idRestaurante);
+    List<Producto> findByCategoria_Restaurante_IdUsuarioAndStockGreaterThanAndEliminadoEnIsNullOrderByNombreAsc(UUID idRestaurante,Integer stock);
+    Optional<Producto> findByIdProductoAndCategoria_Restaurante_IdUsuarioAndEliminadoEnIsNull(UUID idProducto, UUID idRestaurante);
+    boolean existsByCategoria_IdCategoriaAndNombreIgnoreCaseAndEliminadoEnIsNull(UUID idCategoria, String nombre);
+    long countByCategoria_Restaurante_IdUsuarioAndEliminadoEnIsNull(UUID idRestaurante);
 }

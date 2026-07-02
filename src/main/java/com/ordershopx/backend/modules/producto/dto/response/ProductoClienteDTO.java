@@ -17,6 +17,5 @@ public class ProductoClienteDTO {
     private String descripcion;
     private BigDecimal precio;
     private String imagenUrl;
-
     private Boolean disponible;
 }

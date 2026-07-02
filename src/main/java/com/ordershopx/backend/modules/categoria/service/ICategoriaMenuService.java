@@ -9,16 +9,9 @@ import java.util.UUID;
 public interface ICategoriaMenuService {
 
 
-    // Crear Categoria
     CategoriaMenuResponseDTO crearCategoria(CategoriaMenuRequestDTO request);
-
-    // Listar Categorias
     List<CategoriaMenuResponseDTO> listarMisCategorias();
-
-    // Actualizar Categoria
-    CategoriaMenuResponseDTO actualizarCategoria(UUID idCategoria,
-                                                 CategoriaMenuRequestDTO request);
-
-    // Eliminar Categoria
+    CategoriaMenuResponseDTO actualizarCategoria(UUID idCategoria, CategoriaMenuRequestDTO request);
     void eliminarCategoria(UUID idCategoria);
+    List<CategoriaMenuResponseDTO> listarCategoriasPorRestaurante(UUID idRestaurante);
 }

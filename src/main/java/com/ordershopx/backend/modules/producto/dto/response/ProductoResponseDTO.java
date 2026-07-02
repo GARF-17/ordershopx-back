@@ -14,14 +14,11 @@ public class ProductoResponseDTO {
 
     private UUID idProducto;
     private UUID idCategoria;
-
     private String nombre;
     private String descripcion;
     private BigDecimal precio;
     private String imagenUrl;
-
     private Integer stock;
     private Integer stockMinimo;
-
     private Boolean estaDisponible;
 }
