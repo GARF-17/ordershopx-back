@@ -15,20 +15,12 @@ import java.util.UUID;
 public class PagoResponseDTO {
 
     private UUID idPago;
-
     private UUID idPedido;
-
     private String tipoPago;
-
     private MetodoPago metodoPago;
-
     private BigDecimal monto;
-
     private String moneda;
-
     private String numeroOperacion;
-
     private Boolean esConfirmado;
-
     private OffsetDateTime fechaProcesamiento;
 }

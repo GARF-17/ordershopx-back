@@ -13,12 +13,8 @@ import java.util.UUID;
 public class PedidoDetalleResponseDTO {
 
     private UUID idProducto;
-
     private String nombreProducto;
-
     private Integer cantidad;
-
     private BigDecimal precioUnitario;
-
     private BigDecimal subtotal;
 }

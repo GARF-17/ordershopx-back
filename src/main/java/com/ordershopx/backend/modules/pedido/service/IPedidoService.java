@@ -10,17 +10,10 @@ import java.util.UUID;
 public interface IPedidoService {
 
     PedidoResponseDTO crearPedido(PedidoRequestDTO request);
-
     PedidoResponseDTO obtenerPedido(UUID idPedido, boolean incluirHistorial);
-
     List<PedidoResponseDTO> listarPedidosCliente();
-
     List<PedidoResponseDTO> listarColaRestaurante();
-
-
     List<PedidoResponseDTO> listarPedidosRestaurante();
-
     PedidoResponseDTO cambiarEstado(CambiarEstadoPedidoDTO request);
-
     PedidoResponseDTO validarCodigoRecojo(String codigo);
 }

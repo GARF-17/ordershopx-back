@@ -18,30 +18,15 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
 
     // CLIENTE
     List<Pedido> findByCliente_IdUsuarioOrderByFechaCreacionDesc(UUID idCliente);
-
-    List<Pedido> findByCliente_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(
-            UUID idCliente,
-            List<EstadoPedido> estados
-    );
-
+    List<Pedido> findByCliente_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(UUID idCliente, List<EstadoPedido> estados);
     Optional<Pedido> findTopByCliente_IdUsuarioOrderByFechaCreacionDesc(UUID idCliente);
-
     Optional<Pedido> findByIdPedidoAndCliente_IdUsuario(UUID idPedido, UUID idCliente);
 
     // RESTAURANTE
     List<Pedido> findByRestaurante_IdUsuarioOrderByFechaCreacionDesc(UUID idRestaurante);
-
-    List<Pedido> findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
-            UUID idRestaurante,
-            List<EstadoPedido> estados
-    );
-
+    List<Pedido> findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(UUID idRestaurante, List<EstadoPedido> estados);
     Optional<Pedido> findByIdPedidoAndRestaurante_IdUsuario(UUID idPedido, UUID idRestaurante);
 
-    /**
-     * Busca todos os pedidos ativos do restaurante e inclui as ordens COMPLETADAS apenas do dia atual.
-     * O uso do cast '::estado_pedido' previne erros de incompatibilidade com o tipo ENUM nativo do PostgreSQL.
-     */
     @Query(value = """
         SELECT * FROM pedidos p 
         WHERE p.id_restaurante = :idRestaurante 
@@ -61,21 +46,10 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
 
     // CÓDIGOS DE RECOJO
     Optional<Pedido> findByCodigoRecojo(String codigoRecojo);
-
-    Optional<Pedido> findByCodigoRecojoAndRestaurante_IdUsuario(
-            String codigoRecojo,
-            UUID idRestaurante
-    );
-
+    Optional<Pedido> findByCodigoRecojoAndRestaurante_IdUsuario(String codigoRecojo, UUID idRestaurante);
     boolean existsByCodigoRecojo(String codigoRecojo);
-
     boolean existsByCliente_IdUsuarioAndEstadoIn(UUID idCliente, List<EstadoPedido> estados);
-
-    Optional<Pedido> findFirstByCliente_IdUsuarioAndRestaurante_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(
-            UUID idCliente,
-            UUID idRestaurante,
-            List<EstadoPedido> estados
-    );
+    Optional<Pedido> findFirstByCliente_IdUsuarioAndRestaurante_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(UUID idCliente, UUID idRestaurante, List<EstadoPedido> estados);
 
     // CAPACIDAD GLOBAL
     @Query("""

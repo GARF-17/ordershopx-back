@@ -2,7 +2,6 @@ package com.ordershopx.backend.modules.pedido.service.impl;
 
 import com.ordershopx.backend.modules.cliente.entity.Cliente;
 import com.ordershopx.backend.modules.cliente.repository.ClienteRepository;
-import com.ordershopx.backend.modules.pedido.domain.PedidoDomainService;
 import com.ordershopx.backend.modules.pedido.dto.request.*;
 import com.ordershopx.backend.modules.pedido.dto.response.*;
 import com.ordershopx.backend.modules.pedido.entity.*;
@@ -13,16 +12,19 @@ import com.ordershopx.backend.modules.producto.repository.ProductoRepository;
 import com.ordershopx.backend.modules.restaurante.entity.Restaurante;
 import com.ordershopx.backend.modules.restaurante.repository.RestauranteRepository;
 import com.ordershopx.backend.modules.pedido.service.IPedidoService;
+import com.ordershopx.backend.modules.staff.entity.UsuarioRestaurante;
+import com.ordershopx.backend.modules.staff.repository.UsuarioRestauranteRepository;
 import com.ordershopx.backend.modules.usuario.entity.Usuario;
 import com.ordershopx.backend.modules.usuario.service.IUsuarioService;
 import com.ordershopx.backend.shared.enums.EstadoPedido;
 import com.ordershopx.backend.shared.enums.EstadoPagoGlobal;
+import com.ordershopx.backend.shared.enums.RolRestaurante;
 import com.ordershopx.backend.shared.exception.ResourceNotFoundException;
+import com.ordershopx.backend.shared.exception.UnauthorizedException;
 import com.ordershopx.backend.shared.websocket.PedidoWebSocketService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,83 +47,46 @@ public class PedidoServiceImpl implements IPedidoService {
     private final PedidoMapper pedidoMapper;
     private final IUsuarioService usuarioService;
     private final PedidoWebSocketService pedidoWebSocketService;
+    private final UsuarioRestauranteRepository usuarioRestauranteRepository;
 
     private Usuario getUsuarioAutenticado() {
-        String correo = SecurityContextHolder.getContext().getAuthentication().getName();
-        return usuarioService.obtenerPorCorreo(correo);
+        return usuarioService.obtenerPorCorreo(SecurityContextHolder.getContext().getAuthentication().getName());
     }
 
-    // =========================
-    // CREAR PEDIDO
-    // =========================
+    private UsuarioRestaurante getAsignacionStaff() {
+        Usuario usuario = getUsuarioAutenticado();
+        return usuarioRestauranteRepository.findFirstByUsuarioUsuarioIdAndEstaActivoTrue(usuario.getUsuarioId())
+                .orElseThrow(() -> new UnauthorizedException("No estás asignado a ningún restaurante activo."));
+    }
+
     @Override
     @Transactional
     public PedidoResponseDTO crearPedido(PedidoRequestDTO request) {
-
         Usuario usuario = getUsuarioAutenticado();
-
         Cliente cliente = clienteRepository.findByUsuario(usuario)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
 
         Restaurante restaurante = restauranteRepository.findById(request.getIdRestaurante())
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
 
-        List<EstadoPedido> estadosActivos = List.of(
-                EstadoPedido.EN_COLA,
-                EstadoPedido.PREPARANDO
-        );
-
         OffsetDateTime horarioCliente = request.getHorarioRecojoSeleccionado();
-
-        OffsetDateTime inicio = horarioCliente
-                .withSecond(0)
-                .withNano(0)
-                .withMinute((horarioCliente.getMinute() / 10) * 10);
-
+        OffsetDateTime inicio = horarioCliente.withSecond(0).withNano(0).withMinute((horarioCliente.getMinute() / 10) * 10);
         OffsetDateTime fin = inicio.plusMinutes(10);
 
         pedidoRepository.lockRestaurante(restaurante.getIdUsuario());
+        long pedidosEnSlot = pedidoRepository.countByHorarioRango(restaurante.getIdUsuario(), List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO), inicio, fin);
+        int capacidadCocina = restaurante.getCapacidadCocina() != null ? restaurante.getCapacidadCocina() : 10;
 
-        long pedidosEnSlot = pedidoRepository.countByHorarioRango(
-                restaurante.getIdUsuario(),
-                estadosActivos,
-                inicio,
-                fin
-        );
-
-        if (pedidosEnSlot >= restaurante.getCapacidadCocina()) {
-            throw new IllegalStateException("Slot saturado");
+        if (pedidosEnSlot >= capacidadCocina) {
+            throw new IllegalStateException("El restaurante está a su máxima capacidad para este horario.");
         }
 
-        int orden = PedidoDomainService.calcularOrden(pedidosEnSlot);
-
-        int tiempo = PedidoDomainService.calcularTiempo(
-                orden,
-                restaurante.getTiempoPreparacionMin()
-        );
-
-        OffsetDateTime horaEstimada = OffsetDateTime.now().plusMinutes(tiempo);
-
-        Pedido pedido = new Pedido();
-        pedido.setIdPedido(UUID.randomUUID());
-        pedido.setCliente(cliente);
-        pedido.setRestaurante(restaurante);
-        pedido.setCodigoRecojo(generarCodigo());
-        pedido.setEstado(EstadoPedido.EN_COLA);
-        pedido.setEstadoPago(EstadoPagoGlobal.PENDIENTE);
-        pedido.setOrdenCola(orden);
-        pedido.setTiempoEstimadoMin(tiempo);
-        pedido.setHoraEstimadaRecojo(horaEstimada);
-        pedido.setHorarioRecojoSeleccionado(inicio);
-        pedido.setNotasCliente(request.getNotasCliente());
-
         BigDecimal subtotal = BigDecimal.ZERO;
+        List<DetallePedido> detallesList = new ArrayList<>();
 
         for (PedidoItemRequestDTO item : request.getItems()) {
-
             Producto producto = productoRepository.findById(item.getIdProducto())
                     .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
-
             BigDecimal precio = producto.getPrecio();
             BigDecimal sub = precio.multiply(BigDecimal.valueOf(item.getCantidad()));
             subtotal = subtotal.add(sub);
@@ -132,177 +97,128 @@ public class PedidoServiceImpl implements IPedidoService {
             detalle.setCantidad(item.getCantidad());
             detalle.setPrecioUnitario(precio);
             detalle.setSubtotal(sub);
-
-            pedido.addDetalle(detalle);
+            detallesList.add(detalle);
         }
 
+        Pedido pedido = new Pedido();
+        pedido.setCliente(cliente);
+        pedido.setRestaurante(restaurante);
+        pedido.setCodigoRecojo(generarCodigo());
+        pedido.setEstadoPago(EstadoPagoGlobal.PENDIENTE);
+        pedido.setHorarioRecojoSeleccionado(inicio);
+        pedido.setNotasCliente(request.getNotasCliente());
         pedido.setSubtotal(subtotal);
         pedido.setTotal(subtotal);
 
-        Pedido saved = pedidoRepository.save(pedido);
+        for (DetallePedido det : detallesList) pedido.addDetalle(det);
 
-        registrarHistorial(saved);
+        pedidoRepository.saveAndFlush(pedido);
 
-        // Envía el evento al WebSocket para que React Native dispare la notificación local
-        pedidoWebSocketService.notificarNuevoPedido(mapResponse(saved, true));
+        Pedido pedidoCalculado = pedidoRepository.findById(pedido.getIdPedido())
+                .orElseThrow(() -> new IllegalStateException("Error al recargar el pedido"));
+        registrarHistorial(pedidoCalculado);
 
-        return mapResponse(saved, true);
+        PedidoResponseDTO responseDTO = mapResponse(pedidoCalculado, true);
+        pedidoWebSocketService.notificarNuevoPedido(responseDTO);
+
+        return responseDTO;
     }
 
-    // =========================
-    // CAMBIAR ESTADO
-    // =========================
     @Override
     @Transactional
     public PedidoResponseDTO cambiarEstado(CambiarEstadoPedidoDTO request) {
+        UsuarioRestaurante asignacion = getAsignacionStaff();
 
         Pedido pedido = pedidoRepository.findById(request.getIdPedido())
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
 
-        pedido.setEstado(request.getEstado());
+        // Validar que el pedido pertenezca al restaurante donde trabaja el empleado
+        if (!pedido.getRestaurante().getIdUsuario().equals(asignacion.getRestaurante().getIdUsuario())) {
+            throw new UnauthorizedException("Este pedido no pertenece a tu restaurante.");
+        }
 
+        pedido.setEstado(request.getEstado());
         Pedido saved = pedidoRepository.save(pedido);
 
         registrarHistorial(saved);
-
-        // Envía el evento al WebSocket
         pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
 
         return mapResponse(saved, true);
     }
 
-    // =========================
-    // VALIDAR CÓDIGO (¡CON CORRECCIÓN DE HORA!)
-    // =========================
     @Override
     @Transactional
     public PedidoResponseDTO validarCodigoRecojo(String codigo) {
+        UsuarioRestaurante asignacion = getAsignacionStaff();
 
-        Usuario usuario = getUsuarioAutenticado();
+        if (asignacion.getRol() == RolRestaurante.COCINA) {
+            throw new UnauthorizedException("El personal de cocina no está autorizado para validar recojos ni entregar pedidos.");
+        }
 
-        Pedido pedido = pedidoRepository
-                .findByCodigoRecojoAndRestaurante_IdUsuario(codigo, usuario.getUsuarioId())
-                .orElseThrow(() -> new ResourceNotFoundException("Código inválido"));
+        Pedido pedido = pedidoRepository.findByCodigoRecojoAndRestaurante_IdUsuario(codigo, asignacion.getRestaurante().getIdUsuario())
+                .orElseThrow(() -> new ResourceNotFoundException("Código inválido o pedido no encontrado en tu restaurante"));
 
         pedido.setEstado(EstadoPedido.COMPLETADO);
-
-        // Guardamos la hora exacta en la que se recogió el pedido para que la Native Query de la base de datos lo filtre correctamente como "completado hoy".
         pedido.setHoraRealRecojo(OffsetDateTime.now());
 
         Pedido saved = pedidoRepository.save(pedido);
-
         registrarHistorial(saved);
-
-        // Envía el evento final al WebSocket
         pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
 
         return mapResponse(saved, true);
     }
 
-    // =========================
-    // LISTAR TODOS (RESTAURANTE) - NUEVO MÉTODO
-    // =========================
     @Override
     @Transactional(readOnly = true)
     public List<PedidoResponseDTO> listarPedidosRestaurante() {
-        Usuario usuario = getUsuarioAutenticado();
-
-        // Invocamos la Native Query de PostgreSQL que filtra completados solo de hoy
-        return pedidoRepository.findPedidosActualesByRestauranteId(usuario.getUsuarioId())
-                .stream()
-                .map(p -> mapResponse(p, false))
-                .toList();
+        UsuarioRestaurante asignacion = getAsignacionStaff();
+        return pedidoRepository.findPedidosActualesByRestauranteId(asignacion.getRestaurante().getIdUsuario())
+                .stream().map(p -> mapResponse(p, false)).toList();
     }
 
-    // =========================
-    // LISTAR CLIENTE
-    // =========================
     @Override
     public List<PedidoResponseDTO> listarPedidosCliente() {
-
         Usuario usuario = getUsuarioAutenticado();
-
         return pedidoRepository.findByCliente_IdUsuarioOrderByFechaCreacionDesc(usuario.getUsuarioId())
-                .stream()
-                .map(p -> mapResponse(p, false))
-                .toList();
+                .stream().map(p -> mapResponse(p, false)).toList();
     }
 
-    // =========================
-    // COLA RESTAURANTE
-    // =========================
     @Override
     public List<PedidoResponseDTO> listarColaRestaurante() {
-
-        Usuario usuario = getUsuarioAutenticado();
-
-        return pedidoRepository
-                .findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
-                        usuario.getUsuarioId(),
-                        List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO)
-                )
-                .stream()
-                .map(p -> mapResponse(p, false))
-                .toList();
+        UsuarioRestaurante asignacion = getAsignacionStaff();
+        return pedidoRepository.findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
+                        asignacion.getRestaurante().getIdUsuario(),
+                        List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO))
+                .stream().map(p -> mapResponse(p, false)).toList();
     }
 
-    // =========================
-    // OBTENER PEDIDO
-    // =========================
     @Override
     public PedidoResponseDTO obtenerPedido(UUID idPedido, boolean incluirHistorial) {
-
         Pedido pedido = pedidoRepository.findById(idPedido)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
-
         return mapResponse(pedido, incluirHistorial);
     }
 
-    // =========================
-    // HELPERS
-    // =========================
     private void registrarHistorial(Pedido pedido) {
-        historialRepository.save(
-                HistorialPedido.builder()
-                        .pedido(pedido)
-                        .estado(pedido.getEstado())
-                        .fechaCambio(OffsetDateTime.now())
-                        .build()
-        );
+        historialRepository.save(HistorialPedido.builder().pedido(pedido).estado(pedido.getEstado()).fechaCambio(OffsetDateTime.now()).build());
     }
 
     private String generarCodigo() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         SecureRandom random = new SecureRandom();
-
         String codigo;
         do {
             StringBuilder sb = new StringBuilder(6);
-            for (int i = 0; i < 6; i++) {
-                sb.append(chars.charAt(random.nextInt(chars.length())));
-            }
+            for (int i = 0; i < 6; i++) sb.append(chars.charAt(random.nextInt(chars.length())));
             codigo = sb.toString();
         } while (pedidoRepository.existsByCodigoRecojo(codigo));
-
         return codigo;
     }
 
     private PedidoResponseDTO mapResponse(Pedido pedido, boolean incluirHistorial) {
-
         PedidoResponseDTO dto = pedidoMapper.toResponse(pedido);
-
         dto.setItems(pedidoMapper.toDetalleList(pedido.getDetalles()));
-
-        if (incluirHistorial) {
-            dto.setHistorial(
-                    pedidoMapper.toHistorialList(
-                            historialRepository.findByPedido_IdPedidoOrderByFechaCambioAsc(
-                                    pedido.getIdPedido()
-                            )
-                    )
-            );
-        }
-
+        if (incluirHistorial) dto.setHistorial(pedidoMapper.toHistorialList(historialRepository.findByPedido_IdPedidoOrderByFechaCambioAsc(pedido.getIdPedido())));
         return dto;
     }
 }

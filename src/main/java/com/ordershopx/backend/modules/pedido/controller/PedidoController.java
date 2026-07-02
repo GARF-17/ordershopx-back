@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,6 +26,7 @@ public class PedidoController {
     private final IPedidoService pedidoService;
 
     // CREAR PEDIDO
+    @PreAuthorize("hasAuthority('COMENSAL')")
     @PostMapping
     public ResponseEntity<ApiResponse<PedidoResponseDTO>> crearPedido(
             @Valid @RequestBody PedidoRequestDTO request
@@ -39,6 +41,7 @@ public class PedidoController {
     }
 
     // OBTENER PEDIDO POR ID
+    @PreAuthorize("hasAnyAuthority('COMENSAL', 'STAFF_RESTAURANTE')")
     @GetMapping("/{idPedido}")
     public ResponseEntity<ApiResponse<PedidoResponseDTO>> obtenerPedido(
             @PathVariable UUID idPedido,
@@ -54,7 +57,8 @@ public class PedidoController {
         );
     }
 
-    // LISTAR MIS PEDIDOS (CLIENTE)
+    // LISTAR MIS PEDIDOS
+    @PreAuthorize("hasAuthority('COMENSAL')")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<List<PedidoResponseDTO>>> listarMisPedidos() {
 
@@ -67,7 +71,8 @@ public class PedidoController {
         );
     }
 
-    // 🔥 NUEVO ENDPOINT: LISTAR TODOS LOS PEDIDOS DEL RESTAURANTE (Para las pestañas del Front)
+    // LISTAR TODOS LOS PEDIDOS DEL RESTAURANTE
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @GetMapping("/restaurante")
     public ResponseEntity<ApiResponse<List<PedidoResponseDTO>>> listarPedidosRestaurante() {
 
@@ -81,19 +86,19 @@ public class PedidoController {
     }
 
     // LISTAR COLA DEL RESTAURANTE
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @GetMapping("/restaurante/cola")
     public ResponseEntity<ApiResponse<List<PedidoResponseDTO>>> listarColaRestaurante() {
-
         log.info("event=api_listar_cola_restaurante");
-
         List<PedidoResponseDTO> response = pedidoService.listarColaRestaurante();
-
         return ResponseEntity.ok(
                 ApiResponse.success(response, "Cola obtenida correctamente")
         );
     }
 
-    // CAMBIAR ESTADO
+    // CAMBIAR ESTADO DEL PEDIDO
+    // ======================================================================================
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @PatchMapping("/estado")
     public ResponseEntity<ApiResponse<PedidoResponseDTO>> cambiarEstado(
             @Valid @RequestBody CambiarEstadoPedidoDTO request
@@ -109,19 +114,17 @@ public class PedidoController {
         );
     }
 
-    // VALIDAR CÓDIGO QR
+    // VALIDAR CÓDIGO DE RECOJO (Solo Staff - Cuando el cliente llega a recoger)
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @PostMapping("/validar-codigo/{codigo}")
     public ResponseEntity<ApiResponse<PedidoResponseDTO>> validarCodigoRecojo(@PathVariable String codigo) {
 
-        log.info( "event=api_validar_codigo codigo={}", codigo);
+        log.info("event=api_validar_codigo codigo={}", codigo);
 
-        PedidoResponseDTO response =
-                pedidoService.validarCodigoRecojo(
-                        codigo.toUpperCase()
-                );
+        PedidoResponseDTO response = pedidoService.validarCodigoRecojo(codigo.toUpperCase());
 
-        return ResponseEntity.ok( ApiResponse.success( response,"Pedido entregado correctamente")
+        return ResponseEntity.ok(
+                ApiResponse.success(response, "Pedido entregado correctamente")
         );
-
     }
 }
