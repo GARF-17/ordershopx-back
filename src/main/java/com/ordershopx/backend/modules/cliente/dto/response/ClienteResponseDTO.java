@@ -16,14 +16,9 @@ public class ClienteResponseDTO {
     private UUID id;
     private String nombre;
     private String apellido;
-
     private BigDecimal latitud;
     private BigDecimal longitud;
-
     private JsonNode preferenciasJson;
-
-    // Datos de usuario
     private String correoElectronico;
     private String telefono;
-
 }

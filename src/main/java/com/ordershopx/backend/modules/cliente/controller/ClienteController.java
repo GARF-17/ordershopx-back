@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,27 +22,11 @@ import org.springframework.web.bind.annotation.*;
 public class ClienteController {
 
     private final IClienteService clienteService;
-
-    // CREAR CLIENTE
-    @PostMapping
-    public ResponseEntity<ApiResponse<ClienteResponseDTO>> crearCliente(
-            @Valid @RequestBody ClienteRequestDTO request
-    ) {
-
-        log.info("event=api_crear_cliente");
-
-        ClienteResponseDTO response = clienteService.crearCliente(request);
-
-        return ResponseEntity.status(201)
-                .body(ApiResponse.created(response, "Cliente creado correctamente"));
-    }
-
-    // OBTENER MI CLIENTE
+    @PreAuthorize("hasAuthority('COMENSAL')")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<ClienteResponseDTO>> obtenerMiCliente() {
 
         log.info("event=api_obtener_mi_cliente");
-
         ClienteResponseDTO response = clienteService.obtenerMiCliente();
 
         return ResponseEntity.ok(
@@ -49,14 +34,13 @@ public class ClienteController {
         );
     }
 
-    //  ACTUALIZAR UBICACIÓN
+    @PreAuthorize("hasAuthority('COMENSAL')")
     @PutMapping("/ubicacion")
     public ResponseEntity<ApiResponse<Void>> actualizarUbicacion(
             @Valid @RequestBody UbicacionRequestDTO request
     ) {
 
         log.info("event=api_actualizar_ubicacion");
-
         clienteService.actualizarUbicacion(request);
 
         return ResponseEntity.ok(
@@ -64,15 +48,30 @@ public class ClienteController {
         );
     }
 
+    @PreAuthorize("hasAuthority('COMENSAL')")
     @PutMapping("/preferencias")
     public ResponseEntity<ApiResponse<Void>> actualizarPreferencias(
             @RequestBody PreferenciasRequestDTO request
     ) {
 
+        log.info("event=api_actualizar_preferencias");
         clienteService.actualizarPreferencias(request);
 
         return ResponseEntity.ok(
                 ApiResponse.success(null, "Preferencias actualizadas correctamente")
         );
+    }
+
+    @PreAuthorize("hasAuthority('ADMINISTRADOR')")
+    @PostMapping
+    public ResponseEntity<ApiResponse<ClienteResponseDTO>> crearCliente(
+            @Valid @RequestBody ClienteRequestDTO request
+    ) {
+
+        log.info("event=api_crear_cliente_manual");
+        ClienteResponseDTO response = clienteService.crearCliente(request);
+
+        return ResponseEntity.status(201)
+                .body(ApiResponse.created(response, "Cliente creado manualmente de forma correcta"));
     }
 }

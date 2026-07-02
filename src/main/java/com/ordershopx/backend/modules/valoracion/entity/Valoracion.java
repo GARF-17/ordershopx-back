@@ -13,9 +13,6 @@ import jakarta.validation.constraints.Size;
 
 import lombok.*;
 
-import org.hibernate.annotations.CreationTimestamp;
-
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity

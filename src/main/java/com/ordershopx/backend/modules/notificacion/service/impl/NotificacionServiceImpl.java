@@ -5,11 +5,14 @@ import com.ordershopx.backend.modules.notificacion.entity.Notificacion;
 import com.ordershopx.backend.modules.notificacion.mapper.NotificacionMapper;
 import com.ordershopx.backend.modules.notificacion.repository.NotificacionRepository;
 import com.ordershopx.backend.modules.notificacion.service.INotificacionService;
+import com.ordershopx.backend.modules.staff.entity.UsuarioRestaurante;
+import com.ordershopx.backend.modules.staff.repository.UsuarioRestauranteRepository;
 import com.ordershopx.backend.modules.usuario.entity.Usuario;
 import com.ordershopx.backend.modules.usuario.service.IUsuarioService;
-import com.ordershopx.backend.shared.enums.TipoRol;
+import com.ordershopx.backend.shared.enums.RolGlobal;
 import com.ordershopx.backend.shared.enums.TipoNotificacion;
 import com.ordershopx.backend.shared.exception.ResourceNotFoundException;
+import com.ordershopx.backend.shared.exception.UnauthorizedException;
 import com.ordershopx.backend.shared.websocket.PedidoWebSocketService;
 
 import lombok.RequiredArgsConstructor;
@@ -31,26 +34,25 @@ public class NotificacionServiceImpl implements INotificacionService {
     private final NotificacionMapper notificacionMapper;
     private final IUsuarioService usuarioService;
     private final PedidoWebSocketService websocketService;
+    private final UsuarioRestauranteRepository usuarioRestauranteRepository;
 
     private Usuario getUsuarioAutenticado() {
-        String correo = SecurityContextHolder
-                .getContext()
-                .getAuthentication()
-                .getName();
-
+        String correo = SecurityContextHolder.getContext().getAuthentication().getName();
         return usuarioService.obtenerPorCorreo(correo);
+    }
+
+    private UUID obtenerIdBuzon(Usuario usuario) {
+        if (usuario.getRol() == RolGlobal.STAFF_RESTAURANTE) {
+            UsuarioRestaurante asignacion = usuarioRestauranteRepository.findFirstByUsuarioUsuarioIdAndEstaActivoTrue(usuario.getUsuarioId())
+                    .orElseThrow(() -> new UnauthorizedException("No estás asignado a ningún restaurante activo."));
+            return asignacion.getRestaurante().getIdUsuario();
+        }
+        return usuario.getUsuarioId();
     }
 
     @Override
     @Transactional
-    public void crearYEnviarNotificacion(
-            Usuario destinatario,
-            TipoRol rolDestinatario,
-            String titulo,
-            String mensaje,
-            TipoNotificacion tipo,
-            String nombreCliente
-    ) {
+    public void crearYEnviarNotificacion(Usuario destinatario, RolGlobal rolDestinatario, String titulo, String mensaje, TipoNotificacion tipo, String nombreCliente) {
         Notificacion notificacion = new Notificacion();
         notificacion.setUsuario(destinatario);
         notificacion.setRolDestinatario(rolDestinatario);
@@ -62,11 +64,11 @@ public class NotificacionServiceImpl implements INotificacionService {
         Notificacion saved = notificacionRepository.save(notificacion);
         NotificacionResponseDTO dto = notificacionMapper.toResponse(saved);
 
-        if (rolDestinatario == TipoRol.RESTAURANTE) {
+        if (rolDestinatario == RolGlobal.STAFF_RESTAURANTE) {
             websocketService.enviarAlertaRestaurante(destinatario.getUsuarioId(), dto);
             log.info("Alerta de restaurante enviada y guardada: {}", titulo);
 
-        } else if (rolDestinatario == TipoRol.COMENSAL) {
+        } else if (rolDestinatario == RolGlobal.COMENSAL) {
             websocketService.enviarNotificacionCliente(destinatario.getUsuarioId(), dto);
             log.info("Notificacion de comensal enviada y guardada: {}", titulo);
         }
@@ -75,57 +77,57 @@ public class NotificacionServiceImpl implements INotificacionService {
     @Override
     public List<NotificacionResponseDTO> listarPorUsuario() {
         Usuario usuario = getUsuarioAutenticado();
-        List<Notificacion> notificaciones = notificacionRepository
-                .findByUsuario_UsuarioIdOrderByFechaCreacionDesc(usuario.getUsuarioId());
+        UUID idBuzon = obtenerIdBuzon(usuario);
+        List<Notificacion> notificaciones = notificacionRepository.findByUsuario_UsuarioIdOrderByFechaCreacionDesc(idBuzon);
         return notificacionMapper.toResponseList(notificaciones);
     }
 
     @Override
-    public List<NotificacionResponseDTO> listarPorRol(TipoRol rolDestinatario) {
+    public List<NotificacionResponseDTO> listarPorRol(RolGlobal rolDestinatario) {
         Usuario usuario = getUsuarioAutenticado();
-        List<Notificacion> notificaciones = notificacionRepository
-                .findByUsuario_UsuarioIdAndRolDestinatarioOrderByFechaCreacionDesc(
-                        usuario.getUsuarioId(), rolDestinatario);
+        UUID idBuzon = obtenerIdBuzon(usuario);
+        List<Notificacion> notificaciones = notificacionRepository.findByUsuario_UsuarioIdAndRolDestinatarioOrderByFechaCreacionDesc(idBuzon, rolDestinatario);
         return notificacionMapper.toResponseList(notificaciones);
     }
 
     @Override
     public List<NotificacionResponseDTO> listarNoLeidas() {
         Usuario usuario = getUsuarioAutenticado();
-        List<Notificacion> notificaciones = notificacionRepository
-                .findByUsuario_UsuarioIdAndLeidaFalseOrderByFechaCreacionDesc(usuario.getUsuarioId());
+        UUID idBuzon = obtenerIdBuzon(usuario);
+        List<Notificacion> notificaciones = notificacionRepository.findByUsuario_UsuarioIdAndLeidaFalseOrderByFechaCreacionDesc(idBuzon);
         return notificacionMapper.toResponseList(notificaciones);
     }
 
     @Override
-    public List<NotificacionResponseDTO> listarNoLeidasPorRol(TipoRol rolDestinatario) {
+    public List<NotificacionResponseDTO> listarNoLeidasPorRol(RolGlobal rolDestinatario) {
         Usuario usuario = getUsuarioAutenticado();
-        List<Notificacion> notificaciones = notificacionRepository
-                .findByUsuario_UsuarioIdAndRolDestinatarioAndLeidaFalseOrderByFechaCreacionDesc(
-                        usuario.getUsuarioId(), rolDestinatario);
+        UUID idBuzon = obtenerIdBuzon(usuario);
+        List<Notificacion> notificaciones = notificacionRepository.findByUsuario_UsuarioIdAndRolDestinatarioAndLeidaFalseOrderByFechaCreacionDesc(idBuzon, rolDestinatario);
         return notificacionMapper.toResponseList(notificaciones);
     }
 
     @Override
     public long contarNoLeidas() {
         Usuario usuario = getUsuarioAutenticado();
-        return notificacionRepository.countByUsuario_UsuarioIdAndLeidaFalse(usuario.getUsuarioId());
+        UUID idBuzon = obtenerIdBuzon(usuario);
+        return notificacionRepository.countByUsuario_UsuarioIdAndLeidaFalse(idBuzon);
     }
 
     @Override
-    public long contarNoLeidasPorRol(TipoRol rolDestinatario) {
+    public long contarNoLeidasPorRol(RolGlobal rolDestinatario) {
         Usuario usuario = getUsuarioAutenticado();
-        return notificacionRepository.countByUsuario_UsuarioIdAndRolDestinatarioAndLeidaFalse(
-                usuario.getUsuarioId(), rolDestinatario);
+        UUID idBuzon = obtenerIdBuzon(usuario);
+        return notificacionRepository.countByUsuario_UsuarioIdAndRolDestinatarioAndLeidaFalse(idBuzon, rolDestinatario);
     }
 
     @Override
     @Transactional
     public void marcarComoLeida(UUID idNotificacion) {
         Usuario usuario = getUsuarioAutenticado();
-        Notificacion notificacion = notificacionRepository
-                .findByIdNotificacionAndUsuario_UsuarioId(idNotificacion, usuario.getUsuarioId())
-                .orElseThrow(() -> new ResourceNotFoundException("Notificacion no encontrada"));
+        UUID idBuzon = obtenerIdBuzon(usuario);
+
+        Notificacion notificacion = notificacionRepository.findByIdNotificacionAndUsuario_UsuarioId(idNotificacion, idBuzon)
+                .orElseThrow(() -> new ResourceNotFoundException("Notificación no encontrada o no pertenece a tu buzón"));
 
         notificacion.setLeida(true);
         notificacionRepository.save(notificacion);

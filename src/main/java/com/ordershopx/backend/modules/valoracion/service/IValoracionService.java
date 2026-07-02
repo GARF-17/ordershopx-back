@@ -9,14 +9,9 @@ import java.util.UUID;
 public interface IValoracionService {
 
     ValoracionResponseDTO registrarValoracion(ValoracionRequestDTO request);
-
     ValoracionResponseDTO obtenerValoracionPorId(UUID idValoracion);
-
     ValoracionResponseDTO obtenerValoracionPorPedido(UUID idPedido);
-
     List<ValoracionResponseDTO> listarValoracionesRestaurante(UUID idRestaurante);
-
     List<ValoracionResponseDTO> listarMisValoraciones();
-
     void eliminarValoracion(UUID idValoracion);
 }

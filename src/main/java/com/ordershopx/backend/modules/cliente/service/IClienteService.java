@@ -9,13 +9,9 @@ import com.ordershopx.backend.modules.usuario.entity.Usuario;
 public interface IClienteService {
 
     ClienteResponseDTO crearCliente(ClienteRequestDTO request);
-
     ClienteResponseDTO obtenerMiCliente();
-
     void actualizarUbicacion(UbicacionRequestDTO request);
-
     void crearDesdeRegister(Usuario usuario, String nombre, String apellido);
-
     void actualizarPreferencias(PreferenciasRequestDTO request);
 
 }

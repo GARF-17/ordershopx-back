@@ -37,7 +37,6 @@ public class ClienteServiceImpl implements IClienteService {
         return usuarioService.obtenerPorCorreo(correo);
     }
 
-    // CREAR CLIENTE
     @Override
     @Transactional
     public ClienteResponseDTO crearCliente(ClienteRequestDTO request) {
@@ -61,7 +60,6 @@ public class ClienteServiceImpl implements IClienteService {
         return clienteMapper.toResponse(saved);
     }
 
-    // OBTENER CLIENTE
     @Override
     @Transactional(readOnly = true)
     public ClienteResponseDTO obtenerMiCliente() {
@@ -81,7 +79,6 @@ public class ClienteServiceImpl implements IClienteService {
         return clienteMapper.toResponse(cliente);
     }
 
-    // ACTUALIZAR UBICACIÓN
     @Override
     @Transactional
     public void actualizarUbicacion(UbicacionRequestDTO request) {
@@ -104,7 +101,6 @@ public class ClienteServiceImpl implements IClienteService {
         log.info("event=actualizar_ubicacion_success usuario={}", usuario.getCorreoElectronico());
     }
 
-    // CREAR DESDE REGISTER
     @Override
     @Transactional
     public void crearDesdeRegister(Usuario usuario, String nombre, String apellido) {
@@ -127,7 +123,6 @@ public class ClienteServiceImpl implements IClienteService {
         log.info("event=crear_cliente_register_success usuario={}", usuario.getCorreoElectronico());
     }
 
-        // ACTUALIZAR PREFERENCIAS
         @Override
         @Transactional
         public void actualizarPreferencias(PreferenciasRequestDTO request) {

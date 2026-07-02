@@ -4,7 +4,7 @@ import com.ordershopx.backend.modules.pedido.entity.Pedido;
 import com.ordershopx.backend.modules.usuario.entity.Usuario;
 import com.ordershopx.backend.shared.entity.BaseCreacionEntity;
 import com.ordershopx.backend.shared.enums.TipoNotificacion;
-import com.ordershopx.backend.shared.enums.TipoRol;
+import com.ordershopx.backend.shared.enums.RolGlobal;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -31,43 +31,36 @@ public class Notificacion extends BaseCreacionEntity {
     @Column(name = "id_notificacion", nullable = false, updatable = false)
     private UUID idNotificacion;
 
-    // USUARIO DESTINATARIO
     @NotNull(message = "El usuario es obligatorio")
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_usuario", nullable = false)
     private Usuario usuario;
 
-    // PEDIDO RELACIONADO
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_pedido")
     private Pedido pedido;
 
-    // TITULO
     @NotBlank(message = "El título es obligatorio")
     @Size(max = 150, message = "El título no puede superar 150 caracteres")
     @Column(name = "titulo", nullable = false, length = 150)
     private String titulo;
 
-    // MENSAJE
     @NotBlank(message = "El mensaje es obligatorio")
     @Column(name = "mensaje", nullable = false, columnDefinition = "TEXT")
     private String mensaje;
 
-    // TIPO NOTIFICACION
     @NotNull(message = "El tipo de notificación es obligatorio")
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo", nullable = false, columnDefinition = "tipo_notificacion")
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     private TipoNotificacion tipo;
 
-    // ROL DESTINATARIO
     @NotNull(message = "El rol destinatario es obligatorio")
     @Enumerated(EnumType.STRING)
-    @Column(name = "rol_destinatario", nullable = false, columnDefinition = "tipo_rol")
+    @Column(name = "rol_destinatario", nullable = false, columnDefinition = "rol_global")
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    private TipoRol rolDestinatario;
+    private RolGlobal rolDestinatario;
 
-    // ESTADO LECTURA
     @Builder.Default
     @Column(name = "leida")
     private Boolean leida = false;

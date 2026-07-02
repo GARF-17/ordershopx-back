@@ -49,7 +49,6 @@ public class ValoracionServiceImpl implements IValoracionService {
                         new ResourceNotFoundException("Pedido no encontrado")
                 );
 
-        // VALIDAR SI EL PEDIDO YA TIENE VALORACION
         if (valoracionRepository.existsByPedido_IdPedido(
                 pedido.getIdPedido()
         )) {
@@ -58,8 +57,6 @@ public class ValoracionServiceImpl implements IValoracionService {
                     "Este pedido ya tiene una valoración registrada"
             );
         }
-
-        // VALIDAR QUE EL PEDIDO ESTÉ COMPLETADO
         if (pedido.getEstado() != EstadoPedido.COMPLETADO) {
 
             throw new IllegalStateException(
@@ -68,9 +65,7 @@ public class ValoracionServiceImpl implements IValoracionService {
         }
 
         Cliente cliente = pedido.getCliente();
-
         Restaurante restaurante = pedido.getRestaurante();
-
         Valoracion valoracion = Valoracion.builder()
                 .pedido(pedido)
                 .cliente(cliente)
