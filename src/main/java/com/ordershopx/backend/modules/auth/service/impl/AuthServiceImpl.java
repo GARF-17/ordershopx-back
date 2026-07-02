@@ -7,12 +7,14 @@ import com.ordershopx.backend.modules.auth.dto.response.RegisterResponseDTO;
 import com.ordershopx.backend.modules.auth.service.IAuthService;
 
 import com.ordershopx.backend.modules.cliente.service.IClienteService;
-import com.ordershopx.backend.modules.restaurante.service.IRestauranteService;
+import com.ordershopx.backend.modules.staff.entity.UsuarioRestaurante;
+import com.ordershopx.backend.modules.staff.repository.UsuarioRestauranteRepository;
 
 import com.ordershopx.backend.modules.usuario.entity.Usuario;
+import com.ordershopx.backend.modules.usuario.repository.UsuarioRepository;
 import com.ordershopx.backend.modules.usuario.service.IUsuarioService;
 
-import com.ordershopx.backend.shared.enums.TipoRol;
+import com.ordershopx.backend.shared.enums.RolGlobal;
 import com.ordershopx.backend.shared.exception.BadRequestException;
 import com.ordershopx.backend.shared.security.jwt.JwtService;
 
@@ -23,6 +25,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -30,14 +35,16 @@ public class AuthServiceImpl implements IAuthService {
 
     private final IUsuarioService usuarioService;
     private final IClienteService clienteService;
-    private final IRestauranteService restauranteService;
+    private final UsuarioRestauranteRepository usuarioRestauranteRepository;
+
+    private final UsuarioRepository usuarioRepository;
 
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
     // LOGIN
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public LoginResponseDTO login(LoginRequestDTO request) {
 
         log.info("event=auth_login_start correo={}", request.getCorreoElectronico());
@@ -55,31 +62,37 @@ public class AuthServiceImpl implements IAuthService {
 
         log.info("event=auth_login_success usuarioId={}", usuario.getUsuarioId());
 
-        // Obtener idRestaurante si el rol es RESTAURANTE
-        java.util.UUID idRestaurante = null;
-        if (usuario.getRol() == TipoRol.RESTAURANTE) {
-            idRestaurante = usuario.getUsuarioId(); // el idRestaurante ES el idUsuario
+        usuario.setFechaUltimoLogin(OffsetDateTime.now());
+        usuarioRepository.save(usuario);
+
+        UUID idRestaurante = null;
+        if (usuario.getRol() == RolGlobal.STAFF_RESTAURANTE) {
+            idRestaurante = usuarioRestauranteRepository.findByUsuarioUsuarioId(usuario.getUsuarioId())
+                    .stream()
+                    .filter(UsuarioRestaurante::getEstaActivo) // Solo restaurantes donde siga trabajando
+                    .findFirst()
+                    .map(ur -> ur.getRestaurante().getIdUsuario())
+                    .orElse(null);
         }
 
         return LoginResponseDTO.builder()
                 .token(jwtService.generateToken(usuario))
                 .correoElectronico(usuario.getCorreoElectronico())
                 .rol(usuario.getRol().name())
-                .idRestaurante(idRestaurante) // ← nuevo campo
+                .idRestaurante(idRestaurante)
+                .idUsuario(usuario.getUsuarioId())
                 .build();
     }
 
-    // REGISTER
+    // REGISTER PÚBLICO
     @Override
     @Transactional
     public RegisterResponseDTO register(RegisterRequestDTO request) {
 
         log.info("event=auth_register_start correo={}", request.getCorreoElectronico());
 
-        TipoRol rol = parseRol(request.getRol());
-        validarCamposPorRol(request, rol);
+        RolGlobal rol = parseRol(request.getRol());
 
-        //  Crear usuario
         Usuario usuario = Usuario.builder()
                 .correoElectronico(request.getCorreoElectronico())
                 .dni(request.getDni())
@@ -91,7 +104,6 @@ public class AuthServiceImpl implements IAuthService {
 
         usuario = usuarioService.crearUsuario(usuario);
 
-        // Crear perfil
         crearPerfilSegunRol(request, usuario, rol);
 
         log.info("event=auth_register_success usuarioId={}", usuario.getUsuarioId());
@@ -103,10 +115,9 @@ public class AuthServiceImpl implements IAuthService {
     }
 
     // CREACIÓN DE PERFIL
-    private void crearPerfilSegunRol(RegisterRequestDTO request, Usuario usuario, TipoRol rol) {
+    private void crearPerfilSegunRol(RegisterRequestDTO request, Usuario usuario, RolGlobal rol) {
 
-        if (rol == TipoRol.COMENSAL) {
-
+        if (rol == RolGlobal.COMENSAL) {
             clienteService.crearDesdeRegister(
                     usuario,
                     request.getNombre(),
@@ -115,54 +126,17 @@ public class AuthServiceImpl implements IAuthService {
 
             log.info("event=cliente_creado usuarioId={}", usuario.getUsuarioId());
 
-        } else if (rol == TipoRol.RESTAURANTE) {
-
-            restauranteService.crearDesdeRegister(
-                    usuario,
-                    request.getNombreComercial(),
-                    request.getRazonSocial(),
-                    request.getRuc(),
-                    request.getDireccionFiscal()
-            );
-
-            log.info("event=restaurante_creado usuarioId={}", usuario.getUsuarioId());
+        } else {
+            throw new BadRequestException("Operación denegada: Los restaurantes deben registrarse por el flujo de Onboarding.");
         }
     }
 
-    // VALIDACIONES
-    private TipoRol parseRol(String rol) {
+    // UTILIDADES
+    private RolGlobal parseRol(String rol) {
         try {
-            return TipoRol.valueOf(rol);
+            return RolGlobal.valueOf(rol);
         } catch (Exception e) {
             throw new BadRequestException("Rol inválido");
         }
-    }
-
-    private void validarCamposPorRol(RegisterRequestDTO request, TipoRol rol) {
-
-        if (rol == TipoRol.COMENSAL) {
-
-            if (isBlank(request.getNombre())) {
-                throw new BadRequestException("El nombre es obligatorio para COMENSAL");
-            }
-
-            if (isBlank(request.getApellido())) {
-                throw new BadRequestException("El apellido es obligatorio para COMENSAL");
-            }
-
-        } else if (rol == TipoRol.RESTAURANTE) {
-
-            if (isBlank(request.getNombreComercial())) {
-                throw new BadRequestException("El nombre comercial es obligatorio");
-            }
-
-            if (isBlank(request.getRuc())) {
-                throw new BadRequestException("El RUC es obligatorio");
-            }
-        }
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
     }
 }

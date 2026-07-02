@@ -1,12 +1,13 @@
 package com.ordershopx.backend.modules.usuario.entity;
 
 import com.ordershopx.backend.shared.entity.BaseEntity;
-import com.ordershopx.backend.shared.enums.TipoRol;
+import com.ordershopx.backend.shared.enums.RolGlobal;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -40,13 +41,15 @@ public class Usuario extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "rol", nullable = false, columnDefinition = "tipo_rol")
-    private TipoRol rol;
+    @Column(name = "rol", nullable = false, columnDefinition = "rol_global")
+    private RolGlobal rol;
 
     @Column(name = "esta_activo")
     private Boolean estaActivo = true;
 
-
-    @Column(name = "fcm_token", length = 500)
+    @Column(name = "fcm_token", length = 255)
     private String fcmToken;
+
+    @Column(name = "ultimo_login")
+    private OffsetDateTime fechaUltimoLogin;
 }

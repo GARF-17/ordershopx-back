@@ -2,6 +2,8 @@ package com.ordershopx.backend.modules.auth.dto.response;
 
 import lombok.*;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -11,5 +13,7 @@ public class LoginResponseDTO {
     private String token;
     private String correoElectronico;
     private String rol;
-    private java.util.UUID idRestaurante; // ← nuevo campo
+    private UUID idRestaurante;
+    private UUID idUsuario;
+
 }

@@ -27,11 +27,9 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponseDTO>> login(
             @Valid @RequestBody LoginRequestDTO request) {
-
         log.info("event=auth_login_request correo={}", request.getCorreoElectronico());
 
         LoginResponseDTO response = authService.login(request);
-
         log.info("event=auth_login_response correo={}", request.getCorreoElectronico());
 
         return ResponseEntity.ok(
@@ -45,11 +43,9 @@ public class AuthController {
             @Valid @RequestBody RegisterRequestDTO request) {
 
         log.info("event=auth_register_request correo={}", request.getCorreoElectronico());
-
         RegisterResponseDTO response = authService.register(request);
 
         log.info("event=auth_register_response correo={}", request.getCorreoElectronico());
-
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(response, "Usuario registrado correctamente"));
     }

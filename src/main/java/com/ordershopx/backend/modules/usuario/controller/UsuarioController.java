@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,14 +19,13 @@ public class UsuarioController {
 
     private final IUsuarioService usuarioService;
 
+    @PreAuthorize("hasAuthority('ADMINISTRADOR')")
     @GetMapping("/por-correo")
     public ResponseEntity<ApiResponse<Usuario>> obtenerPorCorreo(
             @RequestParam String correo) {
-
         log.info("event=api_get_usuario_by_correo correo={}", correo);
-
         Usuario usuario = usuarioService.obtenerPorCorreo(correo);
-
+        usuario.setClaveHash(null);
         return ResponseEntity.ok(
                 ApiResponse.success(usuario, "Usuario encontrado correctamente")
         );
@@ -43,7 +43,7 @@ public class UsuarioController {
         usuarioService.validarDisponibilidad(correo, dni, telefono);
 
         return ResponseEntity.ok(
-                ApiResponse.success(null, "Datos disponibles")
+                ApiResponse.success(null, "Datos disponibles para registro")
         );
     }
 }

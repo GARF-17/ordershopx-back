@@ -10,7 +10,6 @@ import lombok.*;
 @Builder
 public class RegisterRequestDTO {
 
-    // USUARIO
     @NotBlank(message = "El correo es obligatorio")
     @Email(message = "Debe ser un correo válido")
     @Size(max = 150, message = "Máximo 150 caracteres")
@@ -29,22 +28,12 @@ public class RegisterRequestDTO {
     private String telefono;
 
     @NotBlank(message = "El rol es obligatorio")
-    @Pattern(
-            regexp = "COMENSAL|RESTAURANTE|ADMINISTRADOR",
-            message = "Rol inválido"
-    )
+    @Pattern(regexp = "COMENSAL", message = "Solo se permite el registro de rol COMENSAL por esta vía")
     private String rol;
 
-    // CLIENTE
+    @NotBlank(message = "El nombre es obligatorio")
     private String nombre;
+
+    @NotBlank(message = "El apellido es obligatorio")
     private String apellido;
-
-    // RESTAURANTE
-    private String nombreComercial;
-    private String razonSocial;
-
-    @Pattern(regexp = "^\\d{11}$", message = "El RUC debe tener 11 dígitos")
-    private String ruc;
-
-    private String direccionFiscal;
 }
