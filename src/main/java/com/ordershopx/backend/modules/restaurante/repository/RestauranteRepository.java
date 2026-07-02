@@ -13,12 +13,9 @@ import java.util.UUID;
 public interface RestauranteRepository extends JpaRepository<Restaurante, UUID> {
 
     boolean existsByRuc(String ruc);
-
     Optional<Restaurante> findByRuc(String ruc);
-
     Optional<Restaurante> findByUsuario(Usuario usuario);
 
-    // 🔥 CORRECCIÓN: "restaurantes" en plural y protección "IS NOT NULL"
     @Query(value = """
         SELECT * FROM restaurantes r
         WHERE r.latitud IS NOT NULL 

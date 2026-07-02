@@ -11,5 +11,5 @@ import lombok.*;
 public class EstadoRestauranteRequestDTO {
 
     @NotBlank(message = "El estado es obligatorio")
-    private String estado; // ABIERTO, CERRADO, MANTENIMIENTO
+    private String estado;
 }

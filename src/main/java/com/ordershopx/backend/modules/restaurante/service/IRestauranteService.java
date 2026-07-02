@@ -12,20 +12,12 @@ import java.util.UUID;
 public interface IRestauranteService {
 
     RestauranteResponseDTO obtenerMiRestaurante();
-
     List<RestauranteResponseDTO> listarRestaurantes();
-
-    // 🔥 NUEVA FIRMA: Para la búsqueda de locales en el mapa
     List<RestauranteResponseDTO> buscarRestaurantesCercanos(Double latitud, Double longitud, Double radioKm);
-
     List<HorarioDisponibleDTO> listarHorariosDisponibles(UUID idRestaurante);
-
     RestauranteResponseDTO actualizarRestaurante(RestauranteRequestDTO request);
-
     void actualizarUbicacion(UbicacionRestauranteRequestDTO request);
-
     void cambiarEstado(String estado);
-
     void crearDesdeRegister(Usuario usuario, String nombreComercial,
                             String razonSocial, String ruc, String direccionFiscal);
 
