@@ -9,9 +9,6 @@ import java.util.UUID;
 
 public interface HistorialPedidoRepository extends JpaRepository<HistorialPedido, UUID> {
 
-    // historial completo de un pedido
     List<HistorialPedido> findByPedido_IdPedidoOrderByFechaCambioAsc(UUID idPedido);
-
-    //  últimos estados de un pedido
     List<HistorialPedido> findByPedido_IdPedidoOrderByFechaCambioDesc(UUID idPedido);
 }

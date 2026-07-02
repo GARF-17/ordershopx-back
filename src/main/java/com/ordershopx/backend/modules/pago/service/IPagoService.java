@@ -9,21 +9,9 @@ import java.util.UUID;
 
 public interface IPagoService {
 
-
-     //REGISTRAR PAGO
-
     PagoResponseDTO registrarPago(PagoRequestDTO request);
-
-    // OBTENER PAGO POR ID
     PagoResponseDTO obtenerPagoPorId(UUID idPago);
-
-    // LISTAR PAGOS POR PEDIDO
     List<PagoResponseDTO> listarPagosPedido(UUID idPedido);
-
-    // OBTENER RESUMEN DE PAGOS
     ResumenPagoPedidoDTO obtenerResumenPago(UUID idPedido);
-
-    // LISTAR PAGOS CONFIRMADOS
     List<PagoResponseDTO> listarPagosConfirmados();
-
 }

@@ -18,44 +18,38 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
 
     // CLIENTE
     List<Pedido> findByCliente_IdUsuarioOrderByFechaCreacionDesc(UUID idCliente);
-
-    List<Pedido> findByCliente_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(
-            UUID idCliente,
-            List<EstadoPedido> estados
-    );
-
+    List<Pedido> findByCliente_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(UUID idCliente, List<EstadoPedido> estados);
     Optional<Pedido> findTopByCliente_IdUsuarioOrderByFechaCreacionDesc(UUID idCliente);
-
     Optional<Pedido> findByIdPedidoAndCliente_IdUsuario(UUID idPedido, UUID idCliente);
 
     // RESTAURANTE
     List<Pedido> findByRestaurante_IdUsuarioOrderByFechaCreacionDesc(UUID idRestaurante);
-
-    List<Pedido> findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
-            UUID idRestaurante,
-            List<EstadoPedido> estados
-    );
-
+    List<Pedido> findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(UUID idRestaurante, List<EstadoPedido> estados);
     Optional<Pedido> findByIdPedidoAndRestaurante_IdUsuario(UUID idPedido, UUID idRestaurante);
 
+    @Query(value = """
+        SELECT * FROM pedidos p 
+        WHERE p.id_restaurante = :idRestaurante 
+        AND (
+            p.estado IN ('PENDIENTE'::estado_pedido, 'EN_COLA'::estado_pedido, 'PREPARANDO'::estado_pedido, 'LISTO_PARA_RECOGER'::estado_pedido)
+            OR (p.estado = 'COMPLETADO'::estado_pedido AND p.hora_real_recojo >= CURRENT_DATE)
+        )
+        ORDER BY CASE p.estado
+            WHEN 'EN_COLA'::estado_pedido THEN 1
+            WHEN 'PENDIENTE'::estado_pedido THEN 1
+            WHEN 'PREPARANDO'::estado_pedido THEN 2
+            WHEN 'LISTO_PARA_RECOGER'::estado_pedido THEN 3
+            WHEN 'COMPLETADO'::estado_pedido THEN 4
+            ELSE 5 END
+    """, nativeQuery = true)
+    List<Pedido> findPedidosActualesByRestauranteId(@Param("idRestaurante") UUID idRestaurante);
+
     // CÓDIGOS DE RECOJO
-
     Optional<Pedido> findByCodigoRecojo(String codigoRecojo);
-
-    Optional<Pedido> findByCodigoRecojoAndRestaurante_IdUsuario(
-            String codigoRecojo,
-            UUID idRestaurante
-    );
-
+    Optional<Pedido> findByCodigoRecojoAndRestaurante_IdUsuario(String codigoRecojo, UUID idRestaurante);
     boolean existsByCodigoRecojo(String codigoRecojo);
-
     boolean existsByCliente_IdUsuarioAndEstadoIn(UUID idCliente, List<EstadoPedido> estados);
-
-    Optional<Pedido> findFirstByCliente_IdUsuarioAndRestaurante_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(
-            UUID idCliente,
-            UUID idRestaurante,
-            List<EstadoPedido> estados
-    );
+    Optional<Pedido> findFirstByCliente_IdUsuarioAndRestaurante_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(UUID idCliente, UUID idRestaurante, List<EstadoPedido> estados);
 
     // CAPACIDAD GLOBAL
     @Query("""
@@ -93,6 +87,4 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
         WHERE r.idUsuario = :idRestaurante
     """)
     UUID lockRestaurante(@Param("idRestaurante") UUID idRestaurante);
-
-
 }

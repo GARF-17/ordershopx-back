@@ -10,10 +10,9 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface PedidoMapper {
 
-    @Mapping(target = "idRestaurante",
-            source = "restaurante.idUsuario")
-    @Mapping(target = "nombreRestaurante",
-            source = "restaurante.nombreComercial")
+    @Mapping(target = "idRestaurante", source = "restaurante.idUsuario")
+    @Mapping(target = "nombreRestaurante", source = "restaurante.nombreComercial")
+    @Mapping(target = "idCliente", source = "cliente.idUsuario")   // ← NUEVO
     PedidoResponseDTO toResponse(Pedido pedido);
 
     List<PedidoResponseDTO> toResponseList(List<Pedido> pedidos);
@@ -39,7 +38,6 @@ public interface PedidoMapper {
     @Mapping(target = "horaEstimadaRecojo", ignore = true)
     @Mapping(target = "horaRealRecojo", ignore = true)
     @Mapping(target = "subtotal", ignore = true)
-    //@Mapping(target = "impuestoIgv", ignore = true)
     @Mapping(target = "total", ignore = true)
     @Mapping(target = "cliente", ignore = true)
     @Mapping(target = "restaurante", ignore = true)

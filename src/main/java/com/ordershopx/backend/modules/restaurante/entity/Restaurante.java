@@ -8,6 +8,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -68,4 +69,18 @@ public class Restaurante {
 
     @Column(name = "longitud", precision = 11, scale = 8)
     private BigDecimal longitud;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "creado_por")
+    private Usuario creadoPor;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "validado_por")
+    private Usuario validadoPor;
+
+    @Column(name = "validado_en")
+    private OffsetDateTime validadoEn;
+
+    @Column(name = "onboarding_completado")
+    private Boolean onboardingCompletado;
 }

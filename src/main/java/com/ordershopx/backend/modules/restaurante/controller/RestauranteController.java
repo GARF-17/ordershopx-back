@@ -1,5 +1,6 @@
 package com.ordershopx.backend.modules.restaurante.controller;
 
+import com.ordershopx.backend.modules.restaurante.dto.request.EstadoRestauranteRequestDTO;
 import com.ordershopx.backend.modules.restaurante.dto.request.RestauranteRequestDTO;
 import com.ordershopx.backend.modules.restaurante.dto.request.UbicacionRestauranteRequestDTO;
 import com.ordershopx.backend.modules.restaurante.dto.response.HorarioDisponibleDTO;
@@ -12,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,86 +27,91 @@ public class RestauranteController {
 
     private final IRestauranteService restauranteService;
 
+    @PreAuthorize("hasAnyAuthority('COMENSAL', 'STAFF_RESTAURANTE')")
     @GetMapping
     public ResponseEntity<ApiResponse<List<RestauranteResponseDTO>>> listarRestaurantes() {
 
         log.info("event=api_listar_restaurantes");
-
-        List<RestauranteResponseDTO> response =
-                restauranteService.listarRestaurantes();
-
+        List<RestauranteResponseDTO> response = restauranteService.listarRestaurantes();
         return ResponseEntity.ok(
                 ApiResponse.success(response, "Restaurantes obtenidos correctamente")
         );
     }
 
-    // OBTENER MI RESTAURANTE
+    @PreAuthorize("hasAnyAuthority('COMENSAL', 'STAFF_RESTAURANTE')")
+    @GetMapping("/cercanos")
+    public ResponseEntity<ApiResponse<List<RestauranteResponseDTO>>> buscarRestaurantesCercanos(
+            @RequestParam("lat") Double lat,
+            @RequestParam("lng") Double lng,
+            @RequestParam(value = "radio", defaultValue = "1.5") Double radio
+    ) {
+
+        log.info("event=api_buscar_restaurantes_cercanos lat={} lng={} radio={}", lat, lng, radio);
+        List<RestauranteResponseDTO> response = restauranteService.buscarRestaurantesCercanos(lat, lng, radio);
+        return ResponseEntity.ok(
+                ApiResponse.success(response, "Restaurantes cercanos obtenidos correctamente")
+        );
+    }
+
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<RestauranteResponseDTO>> obtenerMiRestaurante() {
-
         log.info("event=api_obtener_mi_restaurante");
-
         RestauranteResponseDTO response = restauranteService.obtenerMiRestaurante();
-
         return ResponseEntity.ok(
                 ApiResponse.success(response, "Restaurante obtenido correctamente")
         );
     }
 
-    // ACTUALIZAR DATOS
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @PutMapping
     public ResponseEntity<ApiResponse<RestauranteResponseDTO>> actualizarRestaurante(
-            @RequestBody RestauranteRequestDTO request
+            @Valid @RequestBody RestauranteRequestDTO request
     ) {
 
         log.info("event=api_actualizar_restaurante");
-
         RestauranteResponseDTO response = restauranteService.actualizarRestaurante(request);
-
         return ResponseEntity.ok(
                 ApiResponse.success(response, "Restaurante actualizado correctamente")
         );
     }
 
-    // UBICACIÓN
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @PutMapping("/ubicacion")
     public ResponseEntity<ApiResponse<Void>> actualizarUbicacion(
-            @RequestBody UbicacionRestauranteRequestDTO request
+            @Valid @RequestBody UbicacionRestauranteRequestDTO request
     ) {
 
         log.info("event=api_actualizar_ubicacion_restaurante");
-
         restauranteService.actualizarUbicacion(request);
-
         return ResponseEntity.ok(
                 ApiResponse.success(null, "Ubicación actualizada correctamente")
         );
     }
 
-    //  ESTADO
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @PutMapping("/estado")
     public ResponseEntity<ApiResponse<Void>> cambiarEstado(
-            @RequestParam String estado
+            @Valid @RequestBody EstadoRestauranteRequestDTO request
     ) {
 
-        log.info("event=api_cambiar_estado estado={}", estado);
-
-        restauranteService.cambiarEstado(estado);
-
+        log.info("event=api_cambiar_estado estado={}", request.getEstado());
+        restauranteService.cambiarEstado(request.getEstado());
         return ResponseEntity.ok(
                 ApiResponse.success(null, "Estado actualizado correctamente")
         );
     }
 
-    // HORARIOS DISPONIBLES
+    @PreAuthorize("hasAnyAuthority('COMENSAL', 'STAFF_RESTAURANTE')")
     @GetMapping("/{id}/horarios")
-    public ResponseEntity<List<HorarioDisponibleDTO>>
-    listarHorariosDisponibles(
+    public ResponseEntity<ApiResponse<List<HorarioDisponibleDTO>>> listarHorariosDisponibles(
             @PathVariable UUID id
     ) {
+        log.info("event=api_listar_horarios restaurante={}", id);
 
+        List<HorarioDisponibleDTO> response = restauranteService.listarHorariosDisponibles(id);
         return ResponseEntity.ok(
-                restauranteService.listarHorariosDisponibles(id)
+                ApiResponse.success(response, "Horarios obtenidos correctamente")
         );
     }
 }

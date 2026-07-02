@@ -9,7 +9,5 @@ import com.ordershopx.backend.modules.cliente.dto.request.PreferenciasRequestDTO
 public interface IAuthService {
 
     LoginResponseDTO login(LoginRequestDTO request);
-
     RegisterResponseDTO register(RegisterRequestDTO request);;
-
 }

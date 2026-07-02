@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,7 +24,8 @@ public class CategoriaMenuController {
 
     private final ICategoriaMenuService categoriaService;
 
-    // CREAR CATEGORIA
+    // CREAR CATEGORÍA
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @PostMapping
     public ResponseEntity<ApiResponse<CategoriaMenuResponseDTO>> crearCategoria(
             @Valid @RequestBody CategoriaMenuRequestDTO request
@@ -37,7 +39,8 @@ public class CategoriaMenuController {
                 .body(ApiResponse.created(response, "Categoría creada correctamente"));
     }
 
-    // LISTAR MIS CATEGORIAS
+    // LISTAR MIS CATEGORÍAS
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<List<CategoriaMenuResponseDTO>>> listarMisCategorias() {
 
@@ -50,7 +53,8 @@ public class CategoriaMenuController {
         );
     }
 
-    // ACTUALIZAR
+    // ACTUALIZAR CATEGORÍA
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @PutMapping("/{idCategoria}")
     public ResponseEntity<ApiResponse<CategoriaMenuResponseDTO>> actualizarCategoria(
             @PathVariable UUID idCategoria,
@@ -67,7 +71,8 @@ public class CategoriaMenuController {
         );
     }
 
-    // ELIMINAR
+    // ELIMINAR CATEGORÍA
+    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
     @DeleteMapping("/{idCategoria}")
     public ResponseEntity<ApiResponse<Void>> eliminarCategoria(
             @PathVariable UUID idCategoria
@@ -79,6 +84,23 @@ public class CategoriaMenuController {
 
         return ResponseEntity.ok(
                 ApiResponse.success(null, "Categoría eliminada correctamente")
+        );
+    }
+
+    // LISTAR CATEGORÍAS DE UN RESTAURANTE ESPECÍFICO
+    @PreAuthorize("hasAnyAuthority('COMENSAL', 'STAFF_RESTAURANTE')")
+    @GetMapping("/restaurante/{idRestaurante}")
+    public ResponseEntity<ApiResponse<List<CategoriaMenuResponseDTO>>> listarCategoriasPorRestaurante(
+            @PathVariable UUID idRestaurante
+    ) {
+
+        log.info("event=api_listar_categorias_restaurante idRestaurante={}", idRestaurante);
+
+        List<CategoriaMenuResponseDTO> response =
+                categoriaService.listarCategoriasPorRestaurante(idRestaurante);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response, "Categorías obtenidas correctamente para la vitrina")
         );
     }
 }

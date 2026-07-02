@@ -13,17 +13,11 @@ import java.util.UUID;
 public class ValoracionResponseDTO {
 
     private UUID idValoracion;
-
     private UUID idPedido;
-
     private UUID idCliente;
-
     private UUID idRestaurante;
-
     private Integer puntuacion;
-
     private String comentario;
-
     private OffsetDateTime fechaCreacion;
 
 }

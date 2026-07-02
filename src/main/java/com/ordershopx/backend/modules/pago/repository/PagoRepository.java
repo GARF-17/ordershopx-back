@@ -12,14 +12,9 @@ import java.util.UUID;
 public interface PagoRepository extends JpaRepository<Pago, UUID> {
 
     boolean existsByPedido_IdPedidoAndTipoPago(UUID idPedido, TipoPago tipoPago);
-
     Optional<Pago> findByPedido_IdPedidoAndTipoPago(UUID idPedido, TipoPago tipoPago);
-
     List<Pago> findByPedido_IdPedidoOrderByFechaProcesamientoAsc(UUID idPedido);
-
     List<Pago> findByMetodoPago(MetodoPago metodoPago);
-
     List<Pago> findByTipoPago(TipoPago tipoPago);
-
     List<Pago> findByEsConfirmadoTrue();
 }

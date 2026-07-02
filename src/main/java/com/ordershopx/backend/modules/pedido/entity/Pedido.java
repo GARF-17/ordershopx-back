@@ -27,6 +27,7 @@ import java.util.UUID;
 public class Pedido extends BaseEntity {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id_pedido", nullable = false, updatable = false)
     private UUID idPedido;
 
@@ -49,13 +50,13 @@ public class Pedido extends BaseEntity {
     @Column(name = "codigo_recojo", nullable = false, unique = true, length = 6)
     private String codigoRecojo;
 
-    @Column(name = "orden_cola", insertable = false, updatable = false)
+    @Column(name = "orden_cola")
     private Integer ordenCola;
 
-    @Column(name = "tiempo_estimado_min", insertable = false, updatable = false)
+    @Column(name = "tiempo_estimado_min")
     private Integer tiempoEstimadoMin;
 
-    @Column(name = "hora_estimada_recojo", insertable = false, updatable = false)
+    @Column(name = "hora_estimada_recojo", nullable = false)
     private OffsetDateTime horaEstimadaRecojo;
 
     @Column(name = "hora_real_recojo")

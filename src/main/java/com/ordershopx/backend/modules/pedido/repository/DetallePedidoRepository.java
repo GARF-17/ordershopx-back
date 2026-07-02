@@ -8,6 +8,5 @@ import java.util.UUID;
 
 public interface DetallePedidoRepository extends JpaRepository<DetallePedido, UUID> {
 
-    // obtener items de un pedido
     List<DetallePedido> findByPedido_IdPedido(UUID idPedido);
 }

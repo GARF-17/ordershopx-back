@@ -2,7 +2,6 @@ package com.ordershopx.backend.modules.pedido.service.impl;
 
 import com.ordershopx.backend.modules.cliente.entity.Cliente;
 import com.ordershopx.backend.modules.cliente.repository.ClienteRepository;
-import com.ordershopx.backend.modules.pedido.domain.PedidoDomainService;
 import com.ordershopx.backend.modules.pedido.dto.request.*;
 import com.ordershopx.backend.modules.pedido.dto.response.*;
 import com.ordershopx.backend.modules.pedido.entity.*;
@@ -13,22 +12,24 @@ import com.ordershopx.backend.modules.producto.repository.ProductoRepository;
 import com.ordershopx.backend.modules.restaurante.entity.Restaurante;
 import com.ordershopx.backend.modules.restaurante.repository.RestauranteRepository;
 import com.ordershopx.backend.modules.pedido.service.IPedidoService;
+import com.ordershopx.backend.modules.staff.entity.UsuarioRestaurante;
+import com.ordershopx.backend.modules.staff.repository.UsuarioRestauranteRepository;
 import com.ordershopx.backend.modules.usuario.entity.Usuario;
 import com.ordershopx.backend.modules.usuario.service.IUsuarioService;
 import com.ordershopx.backend.shared.enums.EstadoPedido;
 import com.ordershopx.backend.shared.enums.EstadoPagoGlobal;
+import com.ordershopx.backend.shared.enums.RolRestaurante;
 import com.ordershopx.backend.shared.exception.ResourceNotFoundException;
+import com.ordershopx.backend.shared.exception.UnauthorizedException;
 import com.ordershopx.backend.shared.websocket.PedidoWebSocketService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -46,207 +47,133 @@ public class PedidoServiceImpl implements IPedidoService {
     private final PedidoMapper pedidoMapper;
     private final IUsuarioService usuarioService;
     private final PedidoWebSocketService pedidoWebSocketService;
+    private final UsuarioRestauranteRepository usuarioRestauranteRepository;
 
     private Usuario getUsuarioAutenticado() {
-        String correo = SecurityContextHolder.getContext().getAuthentication().getName();
-        return usuarioService.obtenerPorCorreo(correo);
+        return usuarioService.obtenerPorCorreo(SecurityContextHolder.getContext().getAuthentication().getName());
     }
 
-    // CREAR PEDIDO
+    private UsuarioRestaurante getAsignacionStaff() {
+        Usuario usuario = getUsuarioAutenticado();
+        return usuarioRestauranteRepository.findFirstByUsuarioUsuarioIdAndEstaActivoTrue(usuario.getUsuarioId())
+                .orElseThrow(() -> new UnauthorizedException("No estás asignado a ningún restaurante activo."));
+    }
+
     @Override
     @Transactional
     public PedidoResponseDTO crearPedido(PedidoRequestDTO request) {
-
         Usuario usuario = getUsuarioAutenticado();
-
         Cliente cliente = clienteRepository.findByUsuario(usuario)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
 
         Restaurante restaurante = restauranteRepository.findById(request.getIdRestaurante())
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurante no encontrado"));
 
-        List<EstadoPedido> estadosActivos = List.of(
-                EstadoPedido.EN_COLA,
-                EstadoPedido.PREPARANDO
-        );
-
         OffsetDateTime horarioCliente = request.getHorarioRecojoSeleccionado();
-
-        OffsetDateTime inicio = horarioCliente
-                .withSecond(0)
-                .withNano(0)
-                .withMinute((horarioCliente.getMinute() / 10) * 10);
-
+        OffsetDateTime inicio = horarioCliente.withSecond(0).withNano(0).withMinute((horarioCliente.getMinute() / 10) * 10);
         OffsetDateTime fin = inicio.plusMinutes(10);
 
         pedidoRepository.lockRestaurante(restaurante.getIdUsuario());
+        long pedidosEnSlot = pedidoRepository.countByHorarioRango(restaurante.getIdUsuario(), List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO), inicio, fin);
+        int capacidadCocina = restaurante.getCapacidadCocina() != null ? restaurante.getCapacidadCocina() : 10;
 
-        long pedidosEnSlot = pedidoRepository.countByHorarioRango(
-                restaurante.getIdUsuario(),
-                estadosActivos,
-                inicio,
-                fin
-        );
-
-        if (pedidosEnSlot >= restaurante.getCapacidadCocina()) {
-            throw new IllegalStateException("Slot de horario saturado");
+        if (pedidosEnSlot >= capacidadCocina) {
+            throw new IllegalStateException("El restaurante está a su máxima capacidad para este horario.");
         }
 
-        int orden = PedidoDomainService.calcularOrden(pedidosEnSlot);
+        BigDecimal subtotal = BigDecimal.ZERO;
+        List<DetallePedido> detallesList = new ArrayList<>();
 
-        int tiempo = PedidoDomainService.calcularTiempo(
-                orden,
-                restaurante.getTiempoPreparacionMin()
-        );
+        for (PedidoItemRequestDTO item : request.getItems()) {
+            Producto producto = productoRepository.findById(item.getIdProducto())
+                    .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+            BigDecimal precio = producto.getPrecio();
+            BigDecimal sub = precio.multiply(BigDecimal.valueOf(item.getCantidad()));
+            subtotal = subtotal.add(sub);
 
-        OffsetDateTime horaEstimada = OffsetDateTime.now().plusMinutes(tiempo);
+            DetallePedido detalle = new DetallePedido();
+            detalle.setProducto(producto);
+            detalle.setNombreHistorico(producto.getNombre());
+            detalle.setCantidad(item.getCantidad());
+            detalle.setPrecioUnitario(precio);
+            detalle.setSubtotal(sub);
+            detallesList.add(detalle);
+        }
 
         Pedido pedido = new Pedido();
-
-        pedido.setIdPedido(UUID.randomUUID());
         pedido.setCliente(cliente);
         pedido.setRestaurante(restaurante);
         pedido.setCodigoRecojo(generarCodigo());
-        pedido.setEstado(EstadoPedido.EN_COLA);
         pedido.setEstadoPago(EstadoPagoGlobal.PENDIENTE);
-        pedido.setOrdenCola(orden);
-        pedido.setTiempoEstimadoMin(tiempo);
-        pedido.setHoraEstimadaRecojo(horaEstimada);
         pedido.setHorarioRecojoSeleccionado(inicio);
         pedido.setNotasCliente(request.getNotasCliente());
-
-        pedido.setSubtotal(BigDecimal.ZERO);
-        //pedido.setImpuestoIgv(BigDecimal.ZERO);
-        pedido.setTotal(BigDecimal.ZERO);
-
-        BigDecimal subtotal = BigDecimal.ZERO;
-
-        for (PedidoItemRequestDTO item : request.getItems()) {
-
-            Producto producto = productoRepository.findById(item.getIdProducto())
-                    .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
-
-            if (!Boolean.TRUE.equals(producto.getEstaDisponible())
-                    || producto.getStock() == null
-                    || producto.getStock() <= 0) {
-                throw new IllegalStateException("Stock agotado para: " + producto.getNombre());
-            }
-
-            if (producto.getStock() < item.getCantidad()) {
-                throw new IllegalStateException("Stock insuficiente para: " + producto.getNombre());
-            }
-
-            producto.setStock(producto.getStock() - item.getCantidad());
-
-            if (producto.getStock() <= 0) {
-                producto.setEstaDisponible(false);
-            }
-
-            BigDecimal precioUnitario = producto.getPrecio().setScale(2, RoundingMode.HALF_UP);
-
-            BigDecimal sub = precioUnitario
-                    .multiply(BigDecimal.valueOf(item.getCantidad()))
-                    .setScale(2, RoundingMode.HALF_UP);
-
-            DetallePedido detalle = DetallePedido.builder()
-                    .pedido(pedido)
-                    .producto(producto)
-                    .nombreHistorico(producto.getNombre())
-                    .cantidad(item.getCantidad())
-                    .precioUnitario(precioUnitario)
-                    .subtotal(sub)
-                    .build();
-
-            pedido.getDetalles().add(detalle);
-            subtotal = subtotal.add(sub);
-        }
-
-        subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
-
-//        BigDecimal igv = PedidoDomainService.calcularIgv(subtotal)
-//                .setScale(2, RoundingMode.HALF_UP);
-//
-//        BigDecimal total = subtotal.add(igv)
-//                .setScale(2, RoundingMode.HALF_UP);
-//
-//        pedido.setSubtotal(subtotal);
-//        pedido.setImpuestoIgv(igv);
-//        pedido.setTotal(total);
-
         pedido.setSubtotal(subtotal);
         pedido.setTotal(subtotal);
 
-        Pedido saved = pedidoRepository.save(pedido);
+        for (DetallePedido det : detallesList) pedido.addDetalle(det);
 
-        registrarHistorial(saved);
+        pedidoRepository.saveAndFlush(pedido);
 
-        PedidoResponseDTO response = mapResponse(saved, true);
+        Pedido pedidoCalculado = pedidoRepository.findById(pedido.getIdPedido())
+                .orElseThrow(() -> new IllegalStateException("Error al recargar el pedido"));
+        registrarHistorial(pedidoCalculado);
 
-        pedidoWebSocketService.notificarNuevoPedido(response);
+        PedidoResponseDTO responseDTO = mapResponse(pedidoCalculado, true);
+        pedidoWebSocketService.notificarNuevoPedido(responseDTO);
 
-        return response;
+        return responseDTO;
     }
 
-    // CAMBIAR ESTADO
     @Override
     @Transactional
     public PedidoResponseDTO cambiarEstado(CambiarEstadoPedidoDTO request) {
+        UsuarioRestaurante asignacion = getAsignacionStaff();
 
         Pedido pedido = pedidoRepository.findById(request.getIdPedido())
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
 
-        if (!esTransicionValida(pedido.getEstado(), request.getEstado())) {
-            throw new IllegalStateException("Transición inválida");
+        // Validar que el pedido pertenezca al restaurante donde trabaja el empleado
+        if (!pedido.getRestaurante().getIdUsuario().equals(asignacion.getRestaurante().getIdUsuario())) {
+            throw new UnauthorizedException("Este pedido no pertenece a tu restaurante.");
         }
 
         pedido.setEstado(request.getEstado());
-
-        registrarHistorial(pedido);
-
         Pedido saved = pedidoRepository.save(pedido);
 
-        PedidoResponseDTO response = mapResponse(saved, true);
+        registrarHistorial(saved);
+        pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
 
-        pedidoWebSocketService.notificarCambioEstado(response);
-
-        return response;
+        return mapResponse(saved, true);
     }
 
-    // VALIDAR CÓDIGO
     @Override
     @Transactional
     public PedidoResponseDTO validarCodigoRecojo(String codigo) {
+        UsuarioRestaurante asignacion = getAsignacionStaff();
 
-        Usuario usuario = getUsuarioAutenticado();
-
-        Pedido pedido = pedidoRepository
-                .findByCodigoRecojoAndRestaurante_IdUsuario(codigo, usuario.getUsuarioId())
-                .orElseThrow(() -> new ResourceNotFoundException("Código de recojo no encontrado"));
-
-        if (pedido.getEstado() != EstadoPedido.LISTO_PARA_RECOGER) {
-            throw new IllegalStateException("El pedido aún no está listo para entregar");
+        if (asignacion.getRol() == RolRestaurante.COCINA) {
+            throw new UnauthorizedException("El personal de cocina no está autorizado para validar recojos ni entregar pedidos.");
         }
+
+        Pedido pedido = pedidoRepository.findByCodigoRecojoAndRestaurante_IdUsuario(codigo, asignacion.getRestaurante().getIdUsuario())
+                .orElseThrow(() -> new ResourceNotFoundException("Código inválido o pedido no encontrado en tu restaurante"));
 
         pedido.setEstado(EstadoPedido.COMPLETADO);
         pedido.setHoraRealRecojo(OffsetDateTime.now());
 
-        registrarHistorial(pedido);
+        Pedido saved = pedidoRepository.save(pedido);
+        registrarHistorial(saved);
+        pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
 
-        Pedido actualizado = pedidoRepository.save(pedido);
-
-        PedidoResponseDTO response = mapResponse(actualizado, true);
-
-        pedidoWebSocketService.notificarCambioEstado(response);
-
-        return response;
+        return mapResponse(saved, true);
     }
 
-    // RESTO DE MÉTODOS
     @Override
-    public PedidoResponseDTO obtenerPedido(UUID idPedido, boolean incluirHistorial) {
-        Pedido pedido = pedidoRepository.findById(idPedido)
-                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
-        return mapResponse(pedido, incluirHistorial);
+    @Transactional(readOnly = true)
+    public List<PedidoResponseDTO> listarPedidosRestaurante() {
+        UsuarioRestaurante asignacion = getAsignacionStaff();
+        return pedidoRepository.findPedidosActualesByRestauranteId(asignacion.getRestaurante().getIdUsuario())
+                .stream().map(p -> mapResponse(p, false)).toList();
     }
 
     @Override
@@ -258,77 +185,40 @@ public class PedidoServiceImpl implements IPedidoService {
 
     @Override
     public List<PedidoResponseDTO> listarColaRestaurante() {
-        Usuario usuario = getUsuarioAutenticado();
-
+        UsuarioRestaurante asignacion = getAsignacionStaff();
         return pedidoRepository.findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(
-                        usuario.getUsuarioId(),
-                        List.of(
-                                EstadoPedido.EN_COLA,
-                                EstadoPedido.PREPARANDO,
-                                EstadoPedido.LISTO_PARA_RECOGER,
-                                EstadoPedido.COMPLETADO
-                        )
-                )
-                .stream()
-                .map(p -> mapResponse(p, false))
-                .toList();
+                        asignacion.getRestaurante().getIdUsuario(),
+                        List.of(EstadoPedido.EN_COLA, EstadoPedido.PREPARANDO))
+                .stream().map(p -> mapResponse(p, false)).toList();
     }
 
-    private boolean esTransicionValida(EstadoPedido actual, EstadoPedido nuevo) {
-
-        Map<EstadoPedido, Set<EstadoPedido>> reglas = Map.of(
-                EstadoPedido.PENDIENTE, Set.of(EstadoPedido.EN_COLA, EstadoPedido.CANCELADO),
-                EstadoPedido.EN_COLA, Set.of(EstadoPedido.PREPARANDO, EstadoPedido.CANCELADO),
-                EstadoPedido.PREPARANDO, Set.of(EstadoPedido.LISTO_PARA_RECOGER),
-                EstadoPedido.LISTO_PARA_RECOGER, Set.of(EstadoPedido.COMPLETADO),
-                EstadoPedido.COMPLETADO, Set.of(),
-                EstadoPedido.CANCELADO, Set.of()
-        );
-
-        return reglas.getOrDefault(actual, Set.of()).contains(nuevo);
+    @Override
+    public PedidoResponseDTO obtenerPedido(UUID idPedido, boolean incluirHistorial) {
+        Pedido pedido = pedidoRepository.findById(idPedido)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
+        return mapResponse(pedido, incluirHistorial);
     }
 
     private void registrarHistorial(Pedido pedido) {
-        historialRepository.save(
-                HistorialPedido.builder()
-                        .pedido(pedido)
-                        .estado(pedido.getEstado())
-                        .fechaCambio(OffsetDateTime.now())
-                        .build()
-        );
+        historialRepository.save(HistorialPedido.builder().pedido(pedido).estado(pedido.getEstado()).fechaCambio(OffsetDateTime.now()).build());
     }
 
     private String generarCodigo() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         SecureRandom random = new SecureRandom();
         String codigo;
-
         do {
             StringBuilder sb = new StringBuilder(6);
-            for (int i = 0; i < 6; i++) {
-                sb.append(chars.charAt(random.nextInt(chars.length())));
-            }
+            for (int i = 0; i < 6; i++) sb.append(chars.charAt(random.nextInt(chars.length())));
             codigo = sb.toString();
         } while (pedidoRepository.existsByCodigoRecojo(codigo));
-
         return codigo;
     }
 
     private PedidoResponseDTO mapResponse(Pedido pedido, boolean incluirHistorial) {
-
         PedidoResponseDTO dto = pedidoMapper.toResponse(pedido);
         dto.setItems(pedidoMapper.toDetalleList(pedido.getDetalles()));
-
-        if (incluirHistorial) {
-            dto.setHistorial(
-                    pedidoMapper.toHistorialList(
-                            historialRepository.findByPedido_IdPedidoOrderByFechaCambioAsc(
-                                    pedido.getIdPedido()
-                            )
-                    )
-            );
-        }
-
+        if (incluirHistorial) dto.setHistorial(pedidoMapper.toHistorialList(historialRepository.findByPedido_IdPedidoOrderByFechaCambioAsc(pedido.getIdPedido())));
         return dto;
     }
 }

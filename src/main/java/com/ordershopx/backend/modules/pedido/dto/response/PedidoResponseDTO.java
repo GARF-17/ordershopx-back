@@ -17,36 +17,19 @@ import java.util.UUID;
 public class PedidoResponseDTO {
 
     private UUID idPedido;
-
+    private UUID idCliente;
     private String codigoRecojo;
-
     private EstadoPedido estado;
-
     private EstadoPagoGlobal estadoPago;
-
     private UUID idRestaurante;
-
     private String nombreRestaurante;
-
     private Integer ordenCola;
-
     private Integer tiempoEstimadoMin;
-
     private OffsetDateTime horaEstimadaRecojo;
-
     private OffsetDateTime horaRealRecojo;
-
     private BigDecimal subtotal;
-
-    // private BigDecimal impuestoIgv;
-
     private BigDecimal total;
-
     private String notasCliente;
-
-    // items del pedido
     private List<PedidoDetalleResponseDTO> items;
-
-    // historial (OPCIONAL)
     private List<HistorialPedidoDTO> historial;
 }

@@ -12,12 +12,8 @@ import java.math.BigDecimal;
 public class ResumenPagoPedidoDTO {
 
     private BigDecimal totalPedido;
-
     private BigDecimal montoPagado;
-
     private BigDecimal montoPendiente;
-
     private String estadoPago;
-
     private Boolean adelantoPagado;
 }

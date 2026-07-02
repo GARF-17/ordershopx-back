@@ -12,8 +12,6 @@ import java.time.OffsetDateTime;
 public class HorarioDisponibleDTO {
 
     private OffsetDateTime hora;
-
     private Integer cuposDisponibles;
-
     private Boolean disponible;
 }

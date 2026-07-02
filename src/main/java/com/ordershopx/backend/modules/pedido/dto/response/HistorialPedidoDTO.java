@@ -12,6 +12,5 @@ import java.time.OffsetDateTime;
 public class HistorialPedidoDTO {
 
     private String estado;
-
     private OffsetDateTime fechaCambio;
 }
