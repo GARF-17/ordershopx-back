@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -18,6 +19,7 @@ import java.util.List;
 
 @Configuration
 @RequiredArgsConstructor
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -35,40 +37,18 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
 
-                // ── FIX 1: SockJS necesita sesión HTTP para el handshake inicial ──
-                // STATELESS solo para rutas /api/**, el WS queda excluido
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
                 .authorizeHttpRequests(auth -> auth
 
-                        // ── FIX 2: Permitir TODAS las subrutas que usa SockJS ──
-                        // SockJS genera: /ws/info, /ws/{server}/{session}/websocket, etc.
-                        .requestMatchers("/ws").permitAll()
-                        .requestMatchers("/ws/**").permitAll()
-
-                        // PÚBLICOS
+                        // PÚBLICAS
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/api/v1/usuarios/**").permitAll()
-
-                        // ADMIN
-                        .requestMatchers("/api/v1/admin/**").hasRole("ADMINISTRADOR")
-
-                        // RESTAURANTES
-                        .requestMatchers(HttpMethod.GET, "/api/v1/restaurantes/**")
-                        .hasAnyRole("COMENSAL", "RESTAURANTE")
-                        .requestMatchers("/api/v1/restaurantes/**").hasRole("RESTAURANTE")
-
-                        // PRODUCTOS
-                        .requestMatchers(HttpMethod.GET, "/api/v1/productos/**")
-                        .hasAnyRole("COMENSAL", "RESTAURANTE")
-                        .requestMatchers("/api/v1/productos/**").hasRole("RESTAURANTE")
-
-                        // CLIENTES
-                        .requestMatchers("/api/v1/clientes/**").hasRole("COMENSAL")
-
+                        .requestMatchers("/api/v1/onboarding/**").permitAll()
+                        .requestMatchers("/api/v1/staff/validar-invitacion").permitAll()
                         .anyRequest().authenticated()
                 )
 
@@ -86,13 +66,10 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
 
         CorsConfiguration config = new CorsConfiguration();
-
-        // ── FIX 3: SockJS requiere allowCredentials=true para el handshake ──
         config.setAllowedOriginPatterns(List.of("*"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
-
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
 
