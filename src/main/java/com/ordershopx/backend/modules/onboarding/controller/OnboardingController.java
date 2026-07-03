@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -57,6 +58,31 @@ public class OnboardingController {
 
         return ResponseEntity.ok(
                 ApiResponse.success(response, "Estado de la solicitud obtenido correctamente")
+        );
+    }
+
+    @PostMapping("/solicitud/{id}/aprobar")
+    public ResponseEntity<ApiResponse<Void>> aprobarSolicitud(@PathVariable UUID id) {
+
+        log.info("event=api_aprobar_solicitud_restaurante id={}", id);
+
+        onboardingService.aprobarSolicitudYGenerarPin(id);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(null, "Solicitud aprobada. El PIN ha sido enviado al correo del encargado.")
+        );
+    }
+
+
+    @GetMapping("/solicitudes")
+    public ResponseEntity<ApiResponse<List<SolicitudRestauranteResponseDTO>>> listarSolicitudes() {
+
+        log.info("event=api_listar_solicitudes_restaurantes");
+
+        List<SolicitudRestauranteResponseDTO> solicitudes = onboardingService.listarSolicitudes();
+
+        return ResponseEntity.ok(
+                ApiResponse.success(solicitudes, "Lista de solicitudes obtenida correctamente")
         );
     }
 }

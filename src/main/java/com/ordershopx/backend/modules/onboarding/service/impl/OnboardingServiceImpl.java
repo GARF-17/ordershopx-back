@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -76,8 +77,8 @@ public class OnboardingServiceImpl implements IOnboardingService {
         return solicitudMapper.toResponse(solicitudGuardada);
     }
 
-    @Override
     @Transactional
+    @Override
     public AprobacionResponseDTO aprobarSolicitud(UUID idSolicitud, String adminCorreo) {
         log.info("Administrador {} intentando aprobar la solicitud {}", adminCorreo, idSolicitud);
 
@@ -110,7 +111,6 @@ public class OnboardingServiceImpl implements IOnboardingService {
 
         invitacionRepository.save(invitacion);
 
-        // ENVIAMOS EL CORREO ELECTRÓNICO AL DUEÑO DEL RESTAURANTE
         emailService.enviarCorreoInvitacion(
                 solicitud.getEncargadoCorreo(),
                 tokenJwt,
@@ -137,6 +137,7 @@ public class OnboardingServiceImpl implements IOnboardingService {
         if (!jwtService.isInvitationToken(dto.getToken())) {
             throw new UnauthorizedException("El token proporcionado no es válido, no es de invitación o ha expirado.");
         }
+
         InvitacionRestaurante invitacion = invitacionRepository.findByTokenAndPin(dto.getToken(), dto.getPin())
                 .orElseThrow(() -> new BadRequestException("El PIN ingresado es incorrecto o no coincide con el enlace."));
 
@@ -151,16 +152,14 @@ public class OnboardingServiceImpl implements IOnboardingService {
 
         SolicitudRestaurante solicitud = invitacion.getSolicitud();
 
-        boolean dniExiste = usuarioRepository.existsByDni(solicitud.getEncargadoDni());
+        boolean dniExiste    = usuarioRepository.existsByDni(solicitud.getEncargadoDni());
         boolean correoExiste = usuarioRepository.existsByCorreoElectronico(solicitud.getEncargadoCorreo());
 
         if (dniExiste || correoExiste) {
             invitacion.setEstado(EstadoInvitacion.CANCELADA);
             invitacionRepository.save(invitacion);
-
             solicitud.setEstado(EstadoSolicitudRestaurante.RECHAZADA);
             solicitudRepository.save(solicitud);
-
             String motivo = dniExiste ? "El DNI" : "El correo";
             throw new ConflictException("No se puede completar el registro: " + motivo + " ya pertenece a otra cuenta. Por seguridad, esta invitación ha sido CANCELADA.");
         }
@@ -211,15 +210,62 @@ public class OnboardingServiceImpl implements IOnboardingService {
         solicitud.setEstado(EstadoSolicitudRestaurante.ACTIVA);
         solicitudRepository.save(solicitud);
 
-        log.info("Onboarding completado exitosamente para el RUC {}. Usuario OWNER creado.", solicitud.getRuc());
+        log.info("Onboarding completado exitosamente para el RUC {}.", solicitud.getRuc());
     }
 
     @Override
-    @Transactional(readOnly = true)
     public SolicitudRestauranteResponseDTO consultarEstado(UUID solicitudId) {
-        SolicitudRestaurante solicitud = solicitudRepository.findById(solicitudId)
-                .orElseThrow(() -> new ResourceNotFoundException("Solicitud no encontrada"));
-        return solicitudMapper.toResponse(solicitud);
+        return null;
+    }
+
+    @Override
+    @Transactional
+    public void aprobarSolicitudYGenerarPin(UUID idSolicitud) {
+        log.info("Aprobando solicitud {} y generando PIN...", idSolicitud);
+
+        SolicitudRestaurante solicitud = solicitudRepository.findById(idSolicitud)
+                .orElseThrow(() -> new ResourceNotFoundException("Solicitud no encontrada."));
+
+        if (solicitud.getEstado() != EstadoSolicitudRestaurante.PENDIENTE &&
+                solicitud.getEstado() != EstadoSolicitudRestaurante.EN_REVISION) {
+            throw new ConflictException("La solicitud no está en un estado válido para ser aprobada.");
+        }
+
+        solicitud.setEstado(EstadoSolicitudRestaurante.APROBADA);
+        solicitud.setFechaRevision(OffsetDateTime.now());
+        solicitudRepository.save(solicitud);
+
+        String pinSeguro = generarPinSeguro();
+        String tokenJwt  = jwtService.generateInvitationToken(solicitud.getEncargadoCorreo());
+
+        InvitacionRestaurante invitacion = InvitacionRestaurante.builder()
+                .solicitud(solicitud)
+                .token(tokenJwt)
+                .pin(pinSeguro)
+                .expiraEn(OffsetDateTime.now().plusHours(24))
+                .estado(EstadoInvitacion.PENDIENTE)
+                .build();
+
+        invitacionRepository.save(invitacion);
+
+        emailService.enviarCorreoInvitacion(
+                solicitud.getEncargadoCorreo(),
+                tokenJwt,
+                pinSeguro,
+                "DUEÑO DE RESTAURANTE (OWNER)"
+        );
+
+        log.info("Proceso de aprobación completado para solicitud {}.", idSolicitud);
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SolicitudRestauranteResponseDTO> listarSolicitudes() {
+        log.info("Listando todas las solicitudes de restaurantes");
+        return solicitudRepository.findAll().stream()
+                .map(solicitudMapper::toResponse)
+                .toList();
     }
 
     private String generarPinSeguro() {

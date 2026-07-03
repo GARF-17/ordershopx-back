@@ -49,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/onboarding/**").permitAll()
                         .requestMatchers("/api/v1/staff/validar-invitacion").permitAll()
+                        .requestMatchers("/activar").permitAll()
                         .anyRequest().authenticated()
                 )
 
