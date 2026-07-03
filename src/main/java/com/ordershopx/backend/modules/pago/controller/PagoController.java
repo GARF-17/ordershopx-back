@@ -26,14 +26,20 @@ public class PagoController {
     private final IPagoService pagoService;
 
     // REGISTRAR PAGO
-    @PreAuthorize("hasAuthority('STAFF_RESTAURANTE')")
+    @PreAuthorize("hasAnyAuthority('COMENSAL','STAFF_RESTAURANTE')")
     @PostMapping
     public ResponseEntity<ApiResponse<PagoResponseDTO>> registrarPago(
             @Valid @RequestBody PagoRequestDTO request
     ) {
-        log.info("event=api_registrar_pago pedido={} metodo={} monto={}", request.getIdPedido(), request.getMetodoPago(), request.getMonto());
+        log.info("event=api_registrar_pago pedido={} metodo={} monto={}",
+                request.getIdPedido(),
+                request.getMetodoPago(),
+                request.getMonto());
+
         PagoResponseDTO response = pagoService.registrarPago(request);
-        return ResponseEntity.status(201).body(ApiResponse.created(response, "Pago registrado correctamente"));
+
+        return ResponseEntity.status(201)
+                .body(ApiResponse.created(response, "Pago registrado correctamente"));
     }
 
     // OBTENER PAGO POR ID

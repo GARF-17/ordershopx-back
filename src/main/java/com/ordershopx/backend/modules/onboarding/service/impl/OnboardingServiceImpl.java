@@ -134,11 +134,11 @@ public class OnboardingServiceImpl implements IOnboardingService {
     public void validarInvitacion(ValidarInvitacionRequestDTO dto) {
         log.info("Iniciando validación de invitación con PIN");
 
-        if (!jwtService.isInvitationToken(dto.getToken())) {
+        String tokenLimpio = dto.getToken().replace("Bearer ", "").trim();
+        if (!jwtService.isInvitationToken(tokenLimpio)) {
             throw new UnauthorizedException("El token proporcionado no es válido, no es de invitación o ha expirado.");
         }
-
-        InvitacionRestaurante invitacion = invitacionRepository.findByTokenAndPin(dto.getToken(), dto.getPin())
+        InvitacionRestaurante invitacion = invitacionRepository.findByTokenAndPin(tokenLimpio, dto.getPin())
                 .orElseThrow(() -> new BadRequestException("El PIN ingresado es incorrecto o no coincide con el enlace."));
 
         if (invitacion.getEstado() != EstadoInvitacion.PENDIENTE) {

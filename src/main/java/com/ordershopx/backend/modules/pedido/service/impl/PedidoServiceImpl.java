@@ -104,6 +104,10 @@ public class PedidoServiceImpl implements IPedidoService {
         pedido.setCliente(cliente);
         pedido.setRestaurante(restaurante);
         pedido.setCodigoRecojo(generarCodigo());
+
+        // 🔥 CORRECCIÓN CRÍTICA: Estado inicial obligatorio
+        pedido.setEstado(EstadoPedido.PENDIENTE);
+
         pedido.setEstadoPago(EstadoPagoGlobal.PENDIENTE);
         pedido.setHorarioRecojoSeleccionado(inicio);
         pedido.setNotasCliente(request.getNotasCliente());
@@ -114,11 +118,10 @@ public class PedidoServiceImpl implements IPedidoService {
 
         pedidoRepository.saveAndFlush(pedido);
 
-        Pedido pedidoCalculado = pedidoRepository.findById(pedido.getIdPedido())
-                .orElseThrow(() -> new IllegalStateException("Error al recargar el pedido"));
-        registrarHistorial(pedidoCalculado);
+        // 🔥 Registrar historial con estado explícito
+        registrarHistorial(pedido, EstadoPedido.PENDIENTE);
 
-        PedidoResponseDTO responseDTO = mapResponse(pedidoCalculado, true);
+        PedidoResponseDTO responseDTO = mapResponse(pedido, true);
         pedidoWebSocketService.notificarNuevoPedido(responseDTO);
 
         return responseDTO;
@@ -128,11 +131,9 @@ public class PedidoServiceImpl implements IPedidoService {
     @Transactional
     public PedidoResponseDTO cambiarEstado(CambiarEstadoPedidoDTO request) {
         UsuarioRestaurante asignacion = getAsignacionStaff();
-
         Pedido pedido = pedidoRepository.findById(request.getIdPedido())
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
 
-        // Validar que el pedido pertenezca al restaurante donde trabaja el empleado
         if (!pedido.getRestaurante().getIdUsuario().equals(asignacion.getRestaurante().getIdUsuario())) {
             throw new UnauthorizedException("Este pedido no pertenece a tu restaurante.");
         }
@@ -140,9 +141,10 @@ public class PedidoServiceImpl implements IPedidoService {
         pedido.setEstado(request.getEstado());
         Pedido saved = pedidoRepository.save(pedido);
 
-        registrarHistorial(saved);
-        pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
+        // 🔥 Registrar historial pasando el nuevo estado
+        registrarHistorial(saved, request.getEstado());
 
+        pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
         return mapResponse(saved, true);
     }
 
@@ -150,24 +152,35 @@ public class PedidoServiceImpl implements IPedidoService {
     @Transactional
     public PedidoResponseDTO validarCodigoRecojo(String codigo) {
         UsuarioRestaurante asignacion = getAsignacionStaff();
-
         if (asignacion.getRol() == RolRestaurante.COCINA) {
-            throw new UnauthorizedException("El personal de cocina no está autorizado para validar recojos ni entregar pedidos.");
+            throw new UnauthorizedException("El personal de cocina no puede entregar pedidos.");
         }
 
         Pedido pedido = pedidoRepository.findByCodigoRecojoAndRestaurante_IdUsuario(codigo, asignacion.getRestaurante().getIdUsuario())
-                .orElseThrow(() -> new ResourceNotFoundException("Código inválido o pedido no encontrado en tu restaurante"));
+                .orElseThrow(() -> new ResourceNotFoundException("Código inválido"));
 
         pedido.setEstado(EstadoPedido.COMPLETADO);
         pedido.setHoraRealRecojo(OffsetDateTime.now());
 
         Pedido saved = pedidoRepository.save(pedido);
-        registrarHistorial(saved);
-        pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
 
+        // 🔥 Registrar historial con estado COMPLETADO
+        registrarHistorial(saved, EstadoPedido.COMPLETADO);
+
+        pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
         return mapResponse(saved, true);
     }
 
+    // 🔥 MODIFICADO: Ahora recibe el estado explícitamente para evitar nulos
+    private void registrarHistorial(Pedido pedido, EstadoPedido estado) {
+        historialRepository.save(HistorialPedido.builder()
+                .pedido(pedido)
+                .estado(estado) // <--- Aquí ya no es null
+                .fechaCambio(OffsetDateTime.now())
+                .build());
+    }
+
+    // ... (restos de los métodos listar y helpers siguen igual)
     @Override
     @Transactional(readOnly = true)
     public List<PedidoResponseDTO> listarPedidosRestaurante() {
@@ -197,10 +210,6 @@ public class PedidoServiceImpl implements IPedidoService {
         Pedido pedido = pedidoRepository.findById(idPedido)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
         return mapResponse(pedido, incluirHistorial);
-    }
-
-    private void registrarHistorial(Pedido pedido) {
-        historialRepository.save(HistorialPedido.builder().pedido(pedido).estado(pedido.getEstado()).fechaCambio(OffsetDateTime.now()).build());
     }
 
     private String generarCodigo() {

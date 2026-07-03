@@ -14,10 +14,7 @@ import com.ordershopx.backend.modules.staff.entity.UsuarioRestaurante;
 import com.ordershopx.backend.modules.staff.repository.UsuarioRestauranteRepository;
 import com.ordershopx.backend.modules.usuario.entity.Usuario;
 import com.ordershopx.backend.modules.usuario.service.IUsuarioService;
-import com.ordershopx.backend.shared.enums.EstadoPagoGlobal;
-import com.ordershopx.backend.shared.enums.MetodoPago;
-import com.ordershopx.backend.shared.enums.RolRestaurante;
-import com.ordershopx.backend.shared.enums.TipoPago;
+import com.ordershopx.backend.shared.enums.*;
 import com.ordershopx.backend.shared.exception.ResourceNotFoundException;
 import com.ordershopx.backend.shared.exception.UnauthorizedException;
 
@@ -63,52 +60,116 @@ public class PagoServiceImpl implements IPagoService {
     @Transactional
     public PagoResponseDTO registrarPago(PagoRequestDTO request) {
 
-        UsuarioRestaurante cajero = getAsignacionYValidarCaja();
+        Usuario usuario = getUsuarioAutenticado();
+
         Pedido pedido = pedidoRepository.findById(request.getIdPedido())
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
-        if (!pedido.getRestaurante().getIdUsuario().equals(cajero.getRestaurante().getIdUsuario())) {
-            throw new UnauthorizedException("Este pedido no pertenece a tu restaurante.");
+        if (usuario.getRol() == RolGlobal.STAFF_RESTAURANTE) {
+
+            UsuarioRestaurante cajero = getAsignacionYValidarCaja();
+
+            if (!pedido.getRestaurante().getIdUsuario()
+                    .equals(cajero.getRestaurante().getIdUsuario())) {
+
+                throw new UnauthorizedException(
+                        "Este pedido no pertenece a tu restaurante."
+                );
+            }
+
+        }
+
+        // Si es COMENSAL, validar que el pedido sea suyo
+        else if (usuario.getRol() == RolGlobal.COMENSAL) {
+
+            if (!pedido.getCliente()
+                    .getUsuario()
+                    .getUsuarioId()
+                    .equals(usuario.getUsuarioId())) {
+
+                throw new UnauthorizedException(
+                        "Este pedido no pertenece al cliente autenticado."
+                );
+            }
+
+        }
+
+        // Cualquier otro rol no puede registrar pagos
+        else {
+
+            throw new UnauthorizedException(
+                    "No tienes permisos para registrar pagos."
+            );
+
         }
 
         boolean esEfectivo = (request.getMetodoPago() == MetodoPago.EFECTIVO);
-        if (!esEfectivo && (request.getNumeroOperacion() == null || request.getNumeroOperacion().isBlank())) {
-            throw new IllegalStateException("El número de operación o Nro. de Voucher es obligatorio para pagos con " + request.getMetodoPago());
+
+        if (!esEfectivo &&
+                (request.getNumeroOperacion() == null
+                        || request.getNumeroOperacion().isBlank())) {
+
+            throw new IllegalStateException(
+                    "El número de operación o Nro. de Voucher es obligatorio para pagos con "
+                            + request.getMetodoPago());
         }
 
         if (esEfectivo) {
             request.setNumeroOperacion(null);
         }
+
         TipoPago tipoPago = request.getTipoPago();
 
-        if (pagoRepository.existsByPedido_IdPedidoAndTipoPago(pedido.getIdPedido(), tipoPago)) {
-            throw new IllegalStateException("El " + tipoPago + " ya fue registrado previamente para este pedido.");
+        if (pagoRepository.existsByPedido_IdPedidoAndTipoPago(
+                pedido.getIdPedido(),
+                tipoPago)) {
+
+            throw new IllegalStateException(
+                    "El " + tipoPago + " ya fue registrado previamente para este pedido.");
         }
 
         BigDecimal totalPedido = pedido.getTotal().setScale(2, RoundingMode.HALF_UP);
-        BigDecimal montoRequest = request.getMonto().setScale(2, RoundingMode.HALF_UP);
-        BigDecimal montoMinimoAdelanto = totalPedido.multiply(new BigDecimal("0.50")).setScale(2, RoundingMode.HALF_UP);
 
-        // PAGO ADELANTO
+        BigDecimal montoRequest = request.getMonto().setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal montoMinimoAdelanto = totalPedido
+                .multiply(new BigDecimal("0.50"))
+                .setScale(2, RoundingMode.HALF_UP);
+
+        // Pago de adelanto
         if (tipoPago == TipoPago.ADELANTO) {
+
             if (montoRequest.compareTo(montoMinimoAdelanto) < 0) {
-                throw new IllegalStateException("El pago de adelanto debe cubrir como mínimo el 50% del pedido.");
+                throw new IllegalStateException(
+                        "El pago de adelanto debe cubrir como mínimo el 50% del pedido.");
             }
+
             pedido.setEstadoPago(EstadoPagoGlobal.PARCIAL);
         }
 
-        // PAGO COMPLETO
+        // Pago de saldo
         if (tipoPago == TipoPago.SALDO) {
-            List<Pago> pagosPrevios = pagoRepository.findByPedido_IdPedidoOrderByFechaProcesamientoAsc(pedido.getIdPedido());
 
-            BigDecimal pagadoHastaAhora = pagosPrevios.stream()
-                    .map(Pago::getMonto)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            List<Pago> pagosPrevios =
+                    pagoRepository.findByPedido_IdPedidoOrderByFechaProcesamientoAsc(
+                            pedido.getIdPedido());
 
-            BigDecimal restanteReal = totalPedido.subtract(pagadoHastaAhora).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal pagadoHastaAhora =
+                    pagosPrevios.stream()
+                            .map(Pago::getMonto)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal restanteReal =
+                    totalPedido.subtract(pagadoHastaAhora)
+                            .setScale(2, RoundingMode.HALF_UP);
 
             if (montoRequest.compareTo(restanteReal) != 0) {
-                throw new IllegalStateException("El saldo restante a cobrar debe ser exactamente de: " + restanteReal + " " + request.getMoneda());
+
+                throw new IllegalStateException(
+                        "El saldo restante a cobrar debe ser exactamente de: "
+                                + restanteReal + " " + request.getMoneda());
+
             }
+
             pedido.setEstadoPago(EstadoPagoGlobal.COMPLETADO);
         }
 
@@ -124,6 +185,7 @@ public class PagoServiceImpl implements IPagoService {
                 .build();
 
         Pago saved = pagoRepository.save(pago);
+
         pedidoRepository.save(pedido);
 
         return pagoMapper.toResponse(saved);
