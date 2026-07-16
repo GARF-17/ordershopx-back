@@ -11,7 +11,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface RestauranteRepository extends JpaRepository<Restaurante, UUID> {
-
+    long countByEstado(com.ordershopx.backend.shared.enums.EstadoRestaurante estado);
+    long countByEstadoNot(com.ordershopx.backend.shared.enums.EstadoRestaurante estado);
     boolean existsByRuc(String ruc);
     Optional<Restaurante> findByRuc(String ruc);
     Optional<Restaurante> findByUsuario(Usuario usuario);
@@ -31,5 +32,7 @@ public interface RestauranteRepository extends JpaRepository<Restaurante, UUID> 
             @Param("latUsuario") Double latUsuario,
             @Param("lngUsuario") Double lngUsuario,
             @Param("radioKm") Double radioKm
+
+
     );
 }

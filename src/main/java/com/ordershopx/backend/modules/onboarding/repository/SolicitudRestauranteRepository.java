@@ -16,4 +16,6 @@ public interface SolicitudRestauranteRepository extends JpaRepository<SolicitudR
     Optional<SolicitudRestaurante> findByRuc(String ruc);
     List<SolicitudRestaurante> findByEstado(EstadoSolicitudRestaurante estado);
     List<SolicitudRestaurante> findByEstadoOrderByFechaCreacionAsc(EstadoSolicitudRestaurante estado);
+
+    long countByEstado(EstadoSolicitudRestaurante estado);
 }

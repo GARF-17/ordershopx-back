@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -16,13 +17,13 @@ import java.util.UUID;
 
 public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
 
-    // CLIENTE
+
     List<Pedido> findByCliente_IdUsuarioOrderByFechaCreacionDesc(UUID idCliente);
     List<Pedido> findByCliente_IdUsuarioAndEstadoInOrderByFechaCreacionDesc(UUID idCliente, List<EstadoPedido> estados);
     Optional<Pedido> findTopByCliente_IdUsuarioOrderByFechaCreacionDesc(UUID idCliente);
     Optional<Pedido> findByIdPedidoAndCliente_IdUsuario(UUID idPedido, UUID idCliente);
 
-    // RESTAURANTE
+
     List<Pedido> findByRestaurante_IdUsuarioOrderByFechaCreacionDesc(UUID idRestaurante);
     List<Pedido> findByRestaurante_IdUsuarioAndEstadoInOrderByOrdenColaAsc(UUID idRestaurante, List<EstadoPedido> estados);
     Optional<Pedido> findByIdPedidoAndRestaurante_IdUsuario(UUID idPedido, UUID idRestaurante);
@@ -87,4 +88,25 @@ public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
         WHERE r.idUsuario = :idRestaurante
     """)
     UUID lockRestaurante(@Param("idRestaurante") UUID idRestaurante);
+
+
+    @Query("SELECT SUM(p.total) FROM Pedido p WHERE p.restaurante.idUsuario = :id AND p.estado = :estado AND p.fechaCreacion >= :inicio AND p.fechaCreacion <= :fin")
+    BigDecimal sumIngresosByRestauranteAndEstadoAndFecha(@Param("id") UUID id, @Param("estado") EstadoPedido estado, @Param("inicio") OffsetDateTime inicio, @Param("fin") OffsetDateTime fin);
+
+    @Query("SELECT COUNT(p) FROM Pedido p WHERE p.restaurante.idUsuario = :id AND p.fechaCreacion >= :inicio AND p.fechaCreacion <= :fin")
+    long countPedidosEnRango(@Param("id") UUID id, @Param("inicio") OffsetDateTime inicio, @Param("fin") OffsetDateTime fin);
+
+    @Query("SELECT COUNT(p) FROM Pedido p WHERE p.restaurante.idUsuario = :id AND p.estado = :estado AND p.fechaCreacion >= :inicio AND p.fechaCreacion <= :fin")
+    long countPedidosByEstadoEnRango(@Param("id") UUID id, @Param("estado") EstadoPedido estado, @Param("inicio") OffsetDateTime inicio, @Param("fin") OffsetDateTime fin);
+
+    @Query("SELECT COUNT(DISTINCT p.cliente.idUsuario) FROM Pedido p WHERE p.restaurante.idUsuario = :id AND p.fechaCreacion >= :inicio AND p.fechaCreacion <= :fin")
+    long countClientesUnicosEnRango(@Param("id") UUID id, @Param("inicio") OffsetDateTime inicio, @Param("fin") OffsetDateTime fin);
+
+    @Query("SELECT AVG(p.tiempoEstimadoMin) FROM Pedido p WHERE p.restaurante.idUsuario = :id AND p.estado = :estado AND p.fechaCreacion >= :inicio AND p.fechaCreacion <= :fin")
+    Double avgTiempoPreparacionEnRango(@Param("id") UUID id, @Param("estado") EstadoPedido estado, @Param("inicio") OffsetDateTime inicio, @Param("fin") OffsetDateTime fin);
+
+    @Query("SELECT p FROM Pedido p WHERE p.restaurante.idUsuario = :idRestaurante AND p.fechaCreacion >= :inicio AND p.fechaCreacion <= :fin")
+    List<Pedido> findPedidosParaReporte(@Param("idRestaurante") UUID idRestaurante, @Param("inicio") OffsetDateTime inicio, @Param("fin") OffsetDateTime fin);
+
+
 }
