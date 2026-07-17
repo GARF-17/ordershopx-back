@@ -4,7 +4,6 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -25,31 +24,39 @@ public class EmailServiceImpl implements IEmailService {
     @Override
     public void enviarCorreoInvitacion(String destinatario, String token, String pin, String rol) {
         try {
-            SimpleMailMessage mensaje = new SimpleMailMessage();
-            mensaje.setFrom(remitente);
-            mensaje.setTo(destinatario);
-            mensaje.setSubject("¡Te han invitado a unirte a OrderShopX!");
+            // Usamos MimeMessage para permitir formato HTML
+            MimeMessage mensaje = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
 
-            String cuerpoMensaje = String.format(
-                    "Hola,\n\n" +
-                            "Has sido invitado para unirte a OrderShopX con el rol de: %s.\n\n" +
-                            "Para completar tu registro, haz clic en el siguiente enlace:\n" +
-                            "%s?token=%s\n\n" +
-                            "Una vez que ingreses, el sistema te pedirá el siguiente PIN de seguridad:\n" +
-                            "PIN: %s\n\n" +
-                            "¡Bienvenido al equipo!\n" +
-                            "El equipo de OrderShopX",
-                    rol, deepLinkApp, token, pin
-            );
+            helper.setFrom(remitente);
+            helper.setTo(destinatario);
+            helper.setSubject("¡Te han invitado a unirte a OrderShopX!");
 
-            mensaje.setText(cuerpoMensaje);
+            String linkActivacion = deepLinkApp + "?token=" + token;
+
+            String htmlBody = "<div style='font-family: Arial, sans-serif; background-color: #0B0B0B; color: #FFFFFF; padding: 30px; border-radius: 10px; max-width: 600px; margin: 0 auto;'>"
+                    + "<h1 style='color: #10B981; text-align: center;'>¡Invitación a OrderShopX!</h1>"
+                    + "<p style='font-size: 16px;'>Hola,</p>"
+                    + "<p style='font-size: 16px;'>Has sido invitado para unirte al equipo con el rol de: <strong style='color: #8B5CF6;'>" + rol + "</strong>.</p>"
+                    + "<p style='font-size: 16px;'>Para completar tu registro y activar tu cuenta, haz clic en el siguiente botón desde tu celular:</p>"
+                    + "<div style='text-align: center; margin: 35px 0;'>"
+                    + "<a href='" + linkActivacion + "' style='background-color: #8B5CF6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;'>Abrir App y Activar Cuenta</a>"
+                    + "</div>"
+                    + "<p style='font-size: 16px;'>Una vez que la aplicación se abra, te pedirá el siguiente PIN de seguridad:</p>"
+                    + "<div style='background-color: #1A1A1A; padding: 20px; text-align: center; border-radius: 8px; margin: 25px 0; border: 1px solid #2A2A2A;'>"
+                    + "<span style='font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #10B981;'>" + pin + "</span>"
+                    + "</div>"
+                    + "<hr style='border-color: #2A2A2A; margin-top: 30px;' />"
+                    + "<p style='font-size: 12px; color: #8E8E93; text-align: center;'>OrderShopX - Transformando la gestión de tu restaurante</p>"
+                    + "</div>";
+
+            helper.setText(htmlBody, true);
             mailSender.send(mensaje);
 
-            log.info("Correo de invitación con Enlace Mágico enviado exitosamente a: {}", destinatario);
+            log.info("Correo de invitación HTML con botón enviado exitosamente a: {}", destinatario);
 
         } catch (Exception e) {
-            log.error("Error al enviar el correo a {}: {}", destinatario, e.getMessage());
-            // No lanzamos excepción para no romper la transacción de la BD si el correo falla
+            log.error("Error al enviar el correo HTML a {}: {}", destinatario, e.getMessage());
         }
     }
 
@@ -76,7 +83,7 @@ public class EmailServiceImpl implements IEmailService {
                     + "<p style='font-size: 12px; color: #8E8E93; text-align: center;'>OrderShopX - Transformando la gestión de tu restaurante</p>"
                     + "</div>";
 
-            helper.setText(htmlBody, true); // El "true" indica que el texto es HTML
+            helper.setText(htmlBody, true);
 
             mailSender.send(mensaje);
             log.info("Correo de activación HTML enviado exitosamente a: {}", destinatario);
