@@ -1,7 +1,7 @@
 package com.ordershopx.backend.shared.websocket;
 
 import com.ordershopx.backend.modules.pedido.dto.response.PedidoResponseDTO;
-import com.ordershopx.backend.modules.notificacion.dto.response.NotificacionResponseDTO; // Asegúrate de que esta importación sea correcta
+import com.ordershopx.backend.modules.notificacion.dto.response.NotificacionResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
