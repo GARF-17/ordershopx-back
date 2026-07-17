@@ -22,6 +22,9 @@ import com.ordershopx.backend.shared.enums.RolRestaurante;
 import com.ordershopx.backend.shared.exception.ResourceNotFoundException;
 import com.ordershopx.backend.shared.exception.UnauthorizedException;
 import com.ordershopx.backend.shared.websocket.PedidoWebSocketService;
+import com.ordershopx.backend.modules.notificacion.service.INotificacionService;
+import com.ordershopx.backend.shared.enums.RolGlobal;
+import com.ordershopx.backend.shared.enums.TipoNotificacion;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +51,7 @@ public class PedidoServiceImpl implements IPedidoService {
     private final IUsuarioService usuarioService;
     private final PedidoWebSocketService pedidoWebSocketService;
     private final UsuarioRestauranteRepository usuarioRestauranteRepository;
+    private final INotificacionService notificacionService;
 
     private Usuario getUsuarioAutenticado() {
         return usuarioService.obtenerPorCorreo(SecurityContextHolder.getContext().getAuthentication().getName());
@@ -104,10 +108,7 @@ public class PedidoServiceImpl implements IPedidoService {
         pedido.setCliente(cliente);
         pedido.setRestaurante(restaurante);
         pedido.setCodigoRecojo(generarCodigo());
-
-        // 🔥 CORRECCIÓN CRÍTICA: Estado inicial obligatorio
         pedido.setEstado(EstadoPedido.PENDIENTE);
-
         pedido.setEstadoPago(EstadoPagoGlobal.PENDIENTE);
         pedido.setHorarioRecojoSeleccionado(inicio);
         pedido.setNotasCliente(request.getNotasCliente());
@@ -117,12 +118,22 @@ public class PedidoServiceImpl implements IPedidoService {
         for (DetallePedido det : detallesList) pedido.addDetalle(det);
 
         pedidoRepository.saveAndFlush(pedido);
-
-        // 🔥 Registrar historial con estado explícito
         registrarHistorial(pedido, EstadoPedido.PENDIENTE);
 
         PedidoResponseDTO responseDTO = mapResponse(pedido, true);
         pedidoWebSocketService.notificarNuevoPedido(responseDTO);
+
+        String nombreCompletoCliente = cliente.getNombre() +
+                (cliente.getApellido() != null ? " " + cliente.getApellido() : "");
+
+        notificacionService.crearYEnviarNotificacion(
+                restaurante.getUsuario(),
+                RolGlobal.STAFF_RESTAURANTE,
+                "Nuevo pedido recibido",
+                "Tienes un nuevo pedido en cola.",
+                TipoNotificacion.NUEVO_PEDIDO,
+                nombreCompletoCliente
+        );
 
         return responseDTO;
     }
@@ -140,11 +151,30 @@ public class PedidoServiceImpl implements IPedidoService {
 
         pedido.setEstado(request.getEstado());
         Pedido saved = pedidoRepository.save(pedido);
-
-        // 🔥 Registrar historial pasando el nuevo estado
         registrarHistorial(saved, request.getEstado());
 
         pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
+
+        if (request.getEstado() == EstadoPedido.PREPARANDO) {
+            notificacionService.crearYEnviarNotificacion(
+                    saved.getCliente().getUsuario(),
+                    RolGlobal.COMENSAL,
+                    "Pedido en preparación",
+                    "Tu pedido ya comenzó a prepararse.",
+                    TipoNotificacion.PEDIDO_PREPARANDO,
+                    null
+            );
+        } else if (request.getEstado() == EstadoPedido.LISTO_PARA_RECOGER) {
+            notificacionService.crearYEnviarNotificacion(
+                    saved.getCliente().getUsuario(),
+                    RolGlobal.COMENSAL,
+                    "Pedido listo",
+                    "Tu pedido ya está listo para recoger.",
+                    TipoNotificacion.PEDIDO_LISTO,
+                    null
+            );
+        }
+
         return mapResponse(saved, true);
     }
 
@@ -163,24 +193,30 @@ public class PedidoServiceImpl implements IPedidoService {
         pedido.setHoraRealRecojo(OffsetDateTime.now());
 
         Pedido saved = pedidoRepository.save(pedido);
-
-        // 🔥 Registrar historial con estado COMPLETADO
         registrarHistorial(saved, EstadoPedido.COMPLETADO);
 
         pedidoWebSocketService.notificarCambioEstado(mapResponse(saved, true));
+
+        notificacionService.crearYEnviarNotificacion(
+                saved.getCliente().getUsuario(),
+                RolGlobal.COMENSAL,
+                "Pedido completado",
+                "Gracias por usar OrderShopX.",
+                TipoNotificacion.PEDIDO_RECOGIDO,
+                null
+        );
+
         return mapResponse(saved, true);
     }
 
-    // 🔥 MODIFICADO: Ahora recibe el estado explícitamente para evitar nulos
     private void registrarHistorial(Pedido pedido, EstadoPedido estado) {
         historialRepository.save(HistorialPedido.builder()
                 .pedido(pedido)
-                .estado(estado) // <--- Aquí ya no es null
+                .estado(estado)
                 .fechaCambio(OffsetDateTime.now())
                 .build());
     }
 
-    // ... (restos de los métodos listar y helpers siguen igual)
     @Override
     @Transactional(readOnly = true)
     public List<PedidoResponseDTO> listarPedidosRestaurante() {

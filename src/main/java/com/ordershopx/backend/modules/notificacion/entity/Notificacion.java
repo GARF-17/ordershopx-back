@@ -28,7 +28,8 @@ import java.util.UUID;
 public class Notificacion extends BaseCreacionEntity {
 
     @Id
-    @Column(name = "id_notificacion", nullable = false, updatable = false)
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "id_notificacion")
     private UUID idNotificacion;
 
     @NotNull(message = "El usuario es obligatorio")
