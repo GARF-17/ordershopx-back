@@ -16,15 +16,12 @@ public class EmailServiceImpl implements IEmailService {
 
     private final JavaMailSender mailSender;
 
-    @Value("${spring.mail.username}")
+    @Value("${app.mail.sender}")
     private String remitente;
 
     @Value("${app.mobile.deeplink}")
     private String deepLinkApp;
 
-    // ==========================================
-    // 1. MÉTODO ORIGINAL (Invitación al Staff)
-    // ==========================================
     @Override
     public void enviarCorreoInvitacion(String destinatario, String token, String pin, String rol) {
         try {
@@ -56,13 +53,9 @@ public class EmailServiceImpl implements IEmailService {
         }
     }
 
-    // ==========================================
-    // 2. NUEVO MÉTODO HTML (Activación Restaurante)
-    // ==========================================
     @Override
     public void enviarCorreoActivacion(String destinatario, String nombreEncargado, String nombreRestaurante, String pin) {
         try {
-            // MimeMessage permite formato HTML y contenido enriquecido
             MimeMessage mensaje = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
 
@@ -70,7 +63,6 @@ public class EmailServiceImpl implements IEmailService {
             helper.setTo(destinatario);
             helper.setSubject("¡Solicitud Aprobada! Activa tu restaurante en OrderShopX");
 
-            // Diseño HTML oscuro (Dark Mode) haciendo match con tu App Móvil
             String htmlBody = "<div style='font-family: Arial, sans-serif; background-color: #0B0B0B; color: #FFFFFF; padding: 30px; border-radius: 10px; max-width: 600px; margin: 0 auto;'>"
                     + "<h1 style='color: #10B981; text-align: center;'>¡Bienvenido a OrderShopX!</h1>"
                     + "<p style='font-size: 16px;'>Hola <strong>" + nombreEncargado + "</strong>,</p>"
